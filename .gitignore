@@ -1,0 +1,21 @@
+# Entornos virtuales
+.venv/
+venv/
+ENV/
+env/
+
+# Caché de Python
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribución / Empaquetado
+dist/
+build/
+*.egg-info/
+
+# Variables de entorno (¡Muy importante si usas APIs!)
+.env
+
+*.iml
+.idea
