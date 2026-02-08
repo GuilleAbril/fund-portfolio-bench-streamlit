@@ -142,17 +142,23 @@ def render_tab_funds():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # Mostrar mensajes informativos ANTES del botón
+    if not isins or len(isins) == 0:
+        st.info("Añade al menos un fondo para ver la comparación.")
+    elif not st.session_state.should_show_comparison:
+        st.info("Pulsa 'Comparar fondos' para ver la comparación.")
+
     # Botón de comparar
     compare_button = st.button(
         "Comparar fondos",
         key="fund_compare_btn",
         type="primary",
         disabled=not isins or len(isins) == 0,
-        width='stretch'
+        use_container_width=True
     )
 
-    # Si hay ISINs, mostrar selector de fecha y lógica de comparación
-    if isins and len(isins) > 0:
+    # Si hay ISINs y ya se ha hecho una comparación, mostrar selector de fecha
+    if isins and len(isins) > 0 and st.session_state.should_show_comparison:
         start_date = render_funds_date_selector("funds", isins)
         current_date_mode = st.session_state.get("funds_date_mode", "Usar fecha de inicio común")
 
@@ -162,14 +168,14 @@ def render_tab_funds():
         )
 
         if should_compare:
-            st.session_state.should_show_comparison = True
             _execute_comparison(isins, start_date, current_date_mode)
-
-        elif st.session_state.should_show_comparison and st.session_state.last_fig is not None:
+        elif st.session_state.last_fig is not None:
             _show_cached_comparison(current_date_mode)
 
-        else:
-            st.info("Pulsa 'Comparar fondos' para ver la comparación.")
-    else:
-        st.session_state.should_show_comparison = False
-        st.info("Añade al menos un fondo para ver la comparación.")
+    # Primera comparación (cuando se pulsa el botón por primera vez)
+    elif compare_button and isins and len(isins) > 0:
+        st.session_state.should_show_comparison = True
+        # Obtener la fecha por defecto para la primera comparación
+        start_date = render_funds_date_selector("funds", isins)
+        current_date_mode = st.session_state.get("funds_date_mode", "Usar fecha de inicio común")
+        _execute_comparison(isins, start_date, current_date_mode)

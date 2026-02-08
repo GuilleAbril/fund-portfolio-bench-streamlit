@@ -77,6 +77,7 @@ def apply_custom_styles():
             border-bottom: 1px solid #2a2f4a;
         }
 
+        /* Estilos para botones normales */
         .stButton button {
             background: transparent;
             border: 1px dashed #2a2f4a;
@@ -91,6 +92,33 @@ def apply_custom_styles():
         .stButton button:hover {
             border-color: #3b82f6;
             color: #3b82f6;
+        }
+
+        /* Estilos para botones primarios (como "Comparar fondos") */
+        .stButton button[kind="primary"] {
+            background: #1e3a8a;
+            border: 1px solid #3b82f6;
+            color: #60a5fa;
+            border-radius: 6px;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            width: 100%;
+        }
+        .stButton button[kind="primary"]:hover {
+            background: #1e40af;
+            border-color: #60a5fa;
+            color: #93c5fd;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+        }
+        .stButton button[kind="primary"]:disabled {
+            background: #1a1d2e;
+            border-color: #2a2f4a;
+            color: #4a5568;
+            cursor: not-allowed;
+            opacity: 0.5;
         }
 
         /* Estilos para checkboxes */

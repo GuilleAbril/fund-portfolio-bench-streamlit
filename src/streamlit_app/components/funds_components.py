@@ -8,7 +8,7 @@ src_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(src_dir))
 
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 from compare_funds.compare_funds import get_funds_metadata, fund_exists
@@ -58,6 +58,40 @@ def render_funds_inputs(prefix: str, num_funds: int = MAX_FUNDS) -> List[str]:
     return isins
 
 
+def _calculate_date_from_period(period: str, min_start_date: str) -> str:
+    """
+    Calcula la fecha de inicio basada en el período seleccionado.
+
+    Args:
+        period: Período seleccionado (YTD, 1A, 3A, 5A)
+        min_start_date: Fecha mínima disponible
+
+    Returns:
+        Fecha en formato 'YYYY-MM-DD'
+    """
+    today = datetime.now().date()
+
+    if period == "YTD":
+        # Desde el 1 de enero del año actual
+        start_date = datetime(today.year, 1, 1).date()
+    elif period == "1A":
+        start_date = today - timedelta(days=365)
+    elif period == "3A":
+        start_date = today - timedelta(days=365 * 3)
+    elif period == "5A":
+        start_date = today - timedelta(days=365 * 5)
+    else:
+        start_date = today
+
+    # Asegurar que no sea anterior a la fecha mínima disponible
+    if min_start_date:
+        min_date = datetime.strptime(min_start_date, '%Y-%m-%d').date()
+        if start_date < min_date:
+            start_date = min_date
+
+    return start_date.strftime('%Y-%m-%d')
+
+
 def render_funds_date_selector(prefix: str, isins: List[str]) -> Optional[str]:
     """
     Renderiza selector de fecha y tipo de alineamiento para fondos.
@@ -71,47 +105,98 @@ def render_funds_date_selector(prefix: str, isins: List[str]) -> Optional[str]:
     """
     min_start_date = get_min_start_date(isins)
 
-    # Inicializar session_state para guardar la última fecha personalizada
-    session_key = f"{prefix}_last_custom_date"
-    if session_key not in st.session_state:
-        st.session_state[session_key] = min_start_date
+    # Inicializar session_state
+    session_key_mode = f"{prefix}_date_selection"
+    session_key_range = f"{prefix}_date_range"
+    session_key_counter = f"{prefix}_date_counter"  # Nuevo contador para forzar actualización
 
-    # Radio buttons horizontales
-    date_mode = st.radio(
-        "Fecha de inicio de comparación:",
-        options=["Histórico completo", "Usar fecha de inicio común", "Fecha personalizada"],
-        index=1,  # Por defecto "Usar fecha de inicio común"
-        key=f"{prefix}_date_mode",
-        horizontal=True
-    )
-
-    if date_mode == "Histórico completo":
-        start_date = None
-
-    elif date_mode == "Fecha personalizada":
+    if session_key_mode not in st.session_state:
+        st.session_state[session_key_mode] = "Usar fecha de inicio común"
+    if session_key_range not in st.session_state:
         min_date = (datetime.strptime(min_start_date, '%Y-%m-%d').date()
                     if min_start_date else datetime(1990, 1, 1).date())
-        today = datetime.now().date()
-        default_value = st.session_state[session_key]
+        st.session_state[session_key_range] = (min_date, datetime.now().date())
+    if session_key_counter not in st.session_state:
+        st.session_state[session_key_counter] = 0
 
-        if isinstance(default_value, str):
-            default_value = datetime.strptime(default_value, '%Y-%m-%d').date()
+    # Una sola fila con todos los botones
+    st.markdown("**Fecha de inicio de comparación:**")
 
-        start_date = st.date_input(
+    cols = st.columns([2, 2.5, 0.8, 0.8, 0.8, 0.8, 4])
+
+    # Botón "Histórico completo"
+    if cols[0].button("Histórico completo", key=f"{prefix}_btn_historico", use_container_width=True):
+        st.session_state[session_key_mode] = "Histórico completo"
+        # Establecer rango desde la fecha mínima hasta hoy
+        min_date = (datetime.strptime(min_start_date, '%Y-%m-%d').date()
+                    if min_start_date else datetime(1990, 1, 1).date())
+        st.session_state[session_key_range] = (min_date, datetime.now().date())
+        st.session_state[session_key_counter] += 1
+        st.rerun()
+
+    # Botón "Usar fecha de inicio común"
+    if cols[1].button("Usar fecha de inicio común", key=f"{prefix}_btn_comun", use_container_width=True):
+        st.session_state[session_key_mode] = "Usar fecha de inicio común"
+        # Establecer rango desde la fecha común hasta hoy
+        common_date_str = get_max_common_start_date(isins)
+        common_date = datetime.strptime(common_date_str, '%Y-%m-%d').date() if common_date_str else datetime.now().date()
+        st.session_state[session_key_range] = (common_date, datetime.now().date())
+        st.session_state[session_key_counter] += 1
+        st.rerun()
+
+    # Botones de período rápido
+    period_buttons = ["YTD", "1A", "3A", "5A"]
+    for i, period in enumerate(period_buttons):
+        if cols[i + 2].button(period, key=f"{prefix}_btn_{period}", use_container_width=True):
+            st.session_state[session_key_mode] = period
+            # Calcular y guardar las fechas automáticamente
+            calculated_start = _calculate_date_from_period(period, min_start_date)
+            st.session_state[session_key_range] = (
+                datetime.strptime(calculated_start, '%Y-%m-%d').date(),
+                datetime.now().date()
+            )
+            st.session_state[session_key_counter] += 1
+            st.rerun()
+
+    # Mostrar indicador visual de qué está seleccionado
+    current_mode = st.session_state[session_key_mode]
+    if current_mode in ["Histórico completo", "Usar fecha de inicio común"]:
+        st.info(f"📅 Seleccionado: **{current_mode}**")
+    else:
+        st.info(f"📅 Período seleccionado: **{current_mode}**")
+
+    # Selector de rango de fechas (SIEMPRE VISIBLE)
+    min_date = (datetime.strptime(min_start_date, '%Y-%m-%d').date()
+                if min_start_date else datetime(1990, 1, 1).date())
+    today = datetime.now().date()
+
+    col1, col2 = st.columns(2)
+
+    # Usar el contador en las keys para forzar re-renderizado
+    counter = st.session_state[session_key_counter]
+
+    with col1:
+        start_date_input = st.date_input(
             "Fecha desde",
-            value=default_value,
+            value=st.session_state[session_key_range][0],
             min_value=min_date,
             max_value=today,
-            key=f"{prefix}_start_date"
-        ).strftime('%Y-%m-%d')
+            key=f"{prefix}_custom_start_date_{counter}"
+        )
 
-    else:  # "Usar fecha de inicio común"
-        start_date = get_max_common_start_date(isins)
+    with col2:
+        end_date_input = st.date_input(
+            "Fecha hasta",
+            value=st.session_state[session_key_range][1],
+            min_value=min_date,
+            max_value=today,
+            key=f"{prefix}_custom_end_date_{counter}"
+        )
 
-    # Actualizar session_state
-    if start_date:
-        st.session_state[session_key] = start_date
-    else:
-        st.session_state[session_key] = min_start_date
+    # Actualizar el rango en session_state
+    st.session_state[session_key_range] = (start_date_input, end_date_input)
+
+    # Retornar la fecha de inicio
+    start_date = start_date_input.strftime('%Y-%m-%d')
 
     return start_date
