@@ -108,14 +108,42 @@ def render_funds_date_selector(prefix: str, isins: List[str]) -> Optional[str]:
     # Inicializar session_state
     session_key_mode = f"{prefix}_date_selection"
     session_key_range = f"{prefix}_date_range"
-    session_key_counter = f"{prefix}_date_counter"  # Nuevo contador para forzar actualización
+    session_key_counter = f"{prefix}_date_counter"
+    session_key_last_isins = f"{prefix}_last_isins"
 
+    # Detectar cambios en los fondos
+    funds_changed = False
+    if session_key_last_isins not in st.session_state:
+        st.session_state[session_key_last_isins] = []
+        funds_changed = True
+    elif st.session_state[session_key_last_isins] != isins:
+        funds_changed = True
+
+    # Si cambiaron los fondos, resetear a fecha común
+    if funds_changed:
+        st.session_state[session_key_last_isins] = list(isins)
+        st.session_state[session_key_mode] = "Usar fecha de inicio común"
+        
+        # Calcular fecha común
+        common_date_str = get_max_common_start_date(isins)
+        common_date = datetime.strptime(common_date_str, '%Y-%m-%d').date() if common_date_str else datetime.now().date()
+        
+        st.session_state[session_key_range] = (common_date, datetime.now().date())
+        
+        # Incrementar contador si existe, sino inicializar
+        if session_key_counter not in st.session_state:
+            st.session_state[session_key_counter] = 0
+        else:
+            st.session_state[session_key_counter] += 1
+
+    # Asegurar que las keys existen (por si acaso no entró en el if anterior, aunque debería estar cubierto)
     if session_key_mode not in st.session_state:
         st.session_state[session_key_mode] = "Usar fecha de inicio común"
     if session_key_range not in st.session_state:
-        min_date = (datetime.strptime(min_start_date, '%Y-%m-%d').date()
-                    if min_start_date else datetime(1990, 1, 1).date())
-        st.session_state[session_key_range] = (min_date, datetime.now().date())
+        # Fallback por seguridad
+        common_date_str = get_max_common_start_date(isins)
+        common_date = datetime.strptime(common_date_str, '%Y-%m-%d').date() if common_date_str else datetime.now().date()
+        st.session_state[session_key_range] = (common_date, datetime.now().date())
     if session_key_counter not in st.session_state:
         st.session_state[session_key_counter] = 0
 
