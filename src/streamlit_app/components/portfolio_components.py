@@ -8,7 +8,7 @@ src_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(src_dir))
 
 import streamlit as st
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 
 from compare_funds.compare_funds import get_funds_metadata, fund_exists
@@ -148,62 +148,171 @@ def _render_weight_indicator(col, total_weight: float):
         )
 
 
-def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optional[List[str]]) -> Optional[str]:
+def _calculate_date_from_period(period: str, min_start_date: str) -> str:
+    """
+    Calcula la fecha de inicio basada en el período seleccionado.
+
+    Args:
+        period: Período seleccionado (YTD, 1A, 3A, 5A)
+        min_start_date: Fecha mínima disponible
+
+    Returns:
+        Fecha en formato 'YYYY-MM-DD'
+    """
+    today = datetime.now().date()
+
+    if period == "YTD":
+        start_date = datetime(today.year, 1, 1).date()
+    elif period == "1A":
+        start_date = today - timedelta(days=365)
+    elif period == "3A":
+        start_date = today - timedelta(days=365 * 3)
+    elif period == "5A":
+        start_date = today - timedelta(days=365 * 5)
+    else:
+        start_date = today
+
+    if min_start_date:
+        min_date = datetime.strptime(min_start_date, '%Y-%m-%d').date()
+        if start_date < min_date:
+            start_date = min_date
+
+    return start_date.strftime('%Y-%m-%d')
+
+
+def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optional[List[str]], portfolios_structure: List[Dict]) -> Optional[str]:
     """
     Renderiza selector de fecha y tipo de alineamiento para carteras.
 
     Args:
         prefix: Prefijo para las keys de los componentes
         portfolios_start_dates: Lista de fechas de inicio de las carteras
+        portfolios_structure: Estructura actual de las carteras para detectar cambios
 
     Returns:
         Fecha de inicio seleccionada en formato 'YYYY-MM-DD' o None
     """
-    min_start_date = ""
+    # Calcular fecha mínima global (la fecha más antigua posible entre todas las carteras)
+    # y fecha común global (la fecha más reciente entre los inicios de todas las carteras)
+    min_start_date = None
+    common_start_date_str = None
+
     if portfolios_start_dates:
+        # La fecha común válida para todos es el MAX de los inicios
+        common_start_date_str = max(portfolios_start_dates)
+        
+        # Para el "Histórico completo", queremos ver desde el principio de los tiempos de la cartera más antigua
+        # o al menos dar la opción de retroceder.
         min_start_date = min(portfolios_start_dates)
 
-    # Inicializar session_state para guardar la última fecha personalizada
-    session_key = f"{prefix}_last_custom_date"
-    if session_key not in st.session_state:
-        st.session_state[session_key] = min_start_date
+    # Inicializar session_state
+    session_key_mode = f"{prefix}_date_selection"
+    session_key_range = f"{prefix}_date_range"
+    session_key_counter = f"{prefix}_date_counter"
+    session_key_last_structure = f"{prefix}_last_structure"
 
-    # Radio buttons horizontales
-    date_mode = st.radio(
-        "Rango de fechas:",
-        options=["Histórico completo", "Usar fecha de inicio común", "Fecha personalizada"],
-        index=1,  # Por defecto "Usar fecha de inicio común"
-        key=f"{prefix}_date_mode",
-        horizontal=True
-    )
+    # Detectar cambios en la estructura de las carteras
+    # Usamos una representación string o hashable de la estructura relevante (funds + weights)
+    current_structure_repr = str([{p['name']: p['funds']} for p in portfolios_structure])
+    
+    structure_changed = False
+    if session_key_last_structure not in st.session_state:
+        st.session_state[session_key_last_structure] = ""
+        structure_changed = True
+    elif st.session_state[session_key_last_structure] != current_structure_repr:
+        structure_changed = True
 
-    if date_mode == "Histórico completo":
-        start_date = None
+    # Si cambió la estructura, resetear a fecha común
+    if structure_changed:
+        st.session_state[session_key_last_structure] = current_structure_repr
+        st.session_state[session_key_mode] = "Usar fecha de inicio común"
+        
+        common_date = datetime.strptime(common_start_date_str, '%Y-%m-%d').date() if common_start_date_str else datetime.now().date()
+        st.session_state[session_key_range] = (common_date, datetime.now().date())
+        
+        if session_key_counter not in st.session_state:
+            st.session_state[session_key_counter] = 0
+        else:
+            st.session_state[session_key_counter] += 1
 
-    elif date_mode == "Fecha personalizada":
+    if session_key_mode not in st.session_state:
+        st.session_state[session_key_mode] = "Usar fecha de inicio común"
+    if session_key_range not in st.session_state:
+        # Default a fecha común si existen datos
+        start_d = common_start_date_str if common_start_date_str else (min_start_date if min_start_date else None)
+        common_date = datetime.strptime(start_d, '%Y-%m-%d').date() if start_d else datetime.now().date()
+        st.session_state[session_key_range] = (common_date, datetime.now().date())
+    if session_key_counter not in st.session_state:
+        st.session_state[session_key_counter] = 0
+
+    st.markdown("**Fecha de inicio de comparación:**")
+
+    cols = st.columns([2, 2.5, 0.8, 0.8, 0.8, 0.8, 4])
+
+    # Botón "Histórico completo": permite ver desde el inicio de la cartera más antigua
+    if cols[0].button("Histórico completo", key=f"{prefix}_btn_historico", use_container_width=True):
+        st.session_state[session_key_mode] = "Histórico completo"
         min_date = (datetime.strptime(min_start_date, '%Y-%m-%d').date()
                     if min_start_date else datetime(1990, 1, 1).date())
-        today = datetime.now().date()
-        default_value = st.session_state[session_key]
+        st.session_state[session_key_range] = (min_date, datetime.now().date())
+        st.session_state[session_key_counter] += 1
+        st.rerun()
 
-        start_date = st.date_input(
-            "Fecha desde",
-            value=default_value,
-            min_value=min_date,
-            max_value=today,
-            key=f"{prefix}_start_date"
-        ).strftime('%Y-%m-%d')
+    # Botón "Usar fecha de inicio común"
+    if cols[1].button("Usar fecha de inicio común", key=f"{prefix}_btn_comun", use_container_width=True):
+        st.session_state[session_key_mode] = "Usar fecha de inicio común"
+        common_date = datetime.strptime(common_start_date_str, '%Y-%m-%d').date() if common_start_date_str else datetime.now().date()
+        st.session_state[session_key_range] = (common_date, datetime.now().date())
+        st.session_state[session_key_counter] += 1
+        st.rerun()
 
-    else:  # "Usar fecha de inicio común"
-        if portfolios_start_dates:
-            start_date = max(portfolios_start_dates)
-        else:
-            start_date = None
+    # Botones de período
+    period_buttons = ["YTD", "1A", "3A", "5A"]
+    for i, period in enumerate(period_buttons):
+        if cols[i + 2].button(period, key=f"{prefix}_btn_{period}", use_container_width=True):
+            st.session_state[session_key_mode] = period
+            calculated_start = _calculate_date_from_period(period, min_start_date)
+            st.session_state[session_key_range] = (
+                datetime.strptime(calculated_start, '%Y-%m-%d').date(),
+                datetime.now().date()
+            )
+            st.session_state[session_key_counter] += 1
+            st.rerun()
 
-    # Actualizar session_state
-    if start_date:
-        st.session_state[session_key] = start_date
+    # Indicador
+    current_mode = st.session_state[session_key_mode]
+    if current_mode in ["Histórico completo", "Usar fecha de inicio común"]:
+        st.info(f"📅 Seleccionado: **{current_mode}**")
     else:
-        st.session_state[session_key] = min_start_date
+        st.info(f"📅 Período seleccionado: **{current_mode}**")
 
-    return start_date
+    # Selectores de fecha manuales
+    # La fecha mínima permitida en el selector debe ser la mínima global (para permitir retroceder)
+    min_date_obj = (datetime.strptime(min_start_date, '%Y-%m-%d').date()
+                if min_start_date else datetime(1990, 1, 1).date())
+    today = datetime.now().date()
+
+    col1, col2 = st.columns(2)
+    counter = st.session_state[session_key_counter]
+
+    with col1:
+        start_date_input = st.date_input(
+            "Fecha desde",
+            value=st.session_state[session_key_range][0],
+            min_value=min_date_obj,
+            max_value=today,
+            key=f"{prefix}_custom_start_date_{counter}"
+        )
+
+    with col2:
+        end_date_input = st.date_input(
+            "Fecha hasta",
+            value=st.session_state[session_key_range][1],
+            min_value=min_date_obj,
+            max_value=today,
+            key=f"{prefix}_custom_end_date_{counter}"
+        )
+
+    st.session_state[session_key_range] = (start_date_input, end_date_input)
+    
+    return start_date_input.strftime('%Y-%m-%d')

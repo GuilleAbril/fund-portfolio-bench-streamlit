@@ -169,11 +169,9 @@ def plot_portfolios(
 
     for idx, portfolio in enumerate(portfolios_info):
         cagr_str = f"{portfolio.get('cagr'):.2%}"
-        print(portfolio['name'])
-        print(portfolio.get("portfolio_total_return"))
+
         profitability = pc.subtract(portfolio.get("portfolio_total_return")['total_return'], 100)
-        print("last values")
-        print(profitability.to_pylist()[-100:])
+
         fig.add_trace(go.Scatter(
             x=portfolio.get("portfolio_total_return")['date'].to_pylist(),
             y=profitability.to_pylist(),
