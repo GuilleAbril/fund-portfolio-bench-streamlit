@@ -1,9 +1,10 @@
 """
 Aplicación Streamlit para comparar fondos y carteras de inversión.
 """
-# TODO: Poner que se muestre igual el hovertemplate en carteras que fondos
-#  poner opción 1 año y 3 años con el botón y seleccionar fecha incio y fecha fin
+# TODO:
 #  meterle como argumento el path a la data o un env para que lo coja del fichero de config.
+#  Meter una fecha fin, que sea hasta donde se haga la comparación. (de momento hasta el viernes de la semana anterior, tener una semana para cargar datos)
+#  Adaptar carteras para que se muestre igual que fondos.
 
 import sys
 from pathlib import Path
