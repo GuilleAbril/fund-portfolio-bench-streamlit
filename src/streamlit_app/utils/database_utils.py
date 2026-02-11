@@ -1,64 +1,58 @@
 """
-Funciones auxiliares para consultas a la base de datos.
+Helper functions for database queries.
 """
 import sqlite3
-from typing import Optional
+from typing import Optional, List
 from pathlib import Path
 
 from streamlit_app.config import METADATA_DB_PATH
 
 
-def get_max_common_start_date(isins: list[str]) -> Optional[str]:
+def get_max_common_start_date(isins: List[str]) -> Optional[str]:
     """
-    Obtiene la fecha más reciente de inicio entre los fondos (fecha común más tardía).
+    Gets the most recent start date among the funds (latest common start date).
 
     Args:
-        isins: Lista de ISINs de fondos
+        isins: List of fund ISINs.
 
     Returns:
-        Fecha en formato 'YYYY-MM-DD' o None si no se encuentra
+        Date in 'YYYY-MM-DD' format or None if not found.
     """
     metadata_path = Path(METADATA_DB_PATH)
     if not metadata_path.exists():
         return None
 
     try:
-        conn = sqlite3.connect(metadata_path)
-        placeholders = ','.join('?' * len(isins))
-        cursor = conn.execute(
-            f'SELECT MAX(start_date) FROM funds WHERE isin IN ({placeholders})',
-            isins
-        )
-        result = cursor.fetchone()
-        conn.close()
-        return result[0] if result else None
+        with sqlite3.connect(metadata_path) as conn:
+            placeholders = ','.join('?' * len(isins))
+            query = f'SELECT MAX(start_date) FROM funds WHERE isin IN ({placeholders})'
+            cursor = conn.execute(query, isins)
+            result = cursor.fetchone()
+            return result[0] if result else None
     except Exception:
         return None
 
 
-def get_min_start_date(isins: list[str]) -> Optional[str]:
+def get_min_start_date(isins: List[str]) -> Optional[str]:
     """
-    Obtiene la fecha más antigua de inicio entre los fondos.
+    Gets the oldest start date among the funds.
 
     Args:
-        isins: Lista de ISINs de fondos
+        isins: List of fund ISINs.
 
     Returns:
-        Fecha en formato 'YYYY-MM-DD' o None si no se encuentra
+        Date in 'YYYY-MM-DD' format or None if not found.
     """
     metadata_path = Path(METADATA_DB_PATH)
     if not metadata_path.exists():
         return None
 
     try:
-        conn = sqlite3.connect(metadata_path)
-        placeholders = ','.join('?' * len(isins))
-        cursor = conn.execute(
-            f'SELECT MIN(start_date) FROM funds WHERE isin IN ({placeholders})',
-            isins
-        )
-        result = cursor.fetchone()
-        conn.close()
-        return result[0] if result else None
+        with sqlite3.connect(metadata_path) as conn:
+            placeholders = ','.join('?' * len(isins))
+            query = f'SELECT MIN(start_date) FROM funds WHERE isin IN ({placeholders})'
+            cursor = conn.execute(query, isins)
+            result = cursor.fetchone()
+            return result[0] if result else None
     except Exception:
         return None

@@ -1,5 +1,5 @@
 """
-Lógica de la pestaña de comparación de fondos.
+Logic for the funds comparison tab.
 """
 import sys
 from pathlib import Path
@@ -12,54 +12,51 @@ import streamlit as st
 from compare_funds.compare_funds import get_funds_for_comparison
 from plot_funds.plot_funds import plot_funds
 from streamlit_app.components.funds_components import render_funds_inputs, render_funds_date_selector
+from streamlit_app.utils.common import init_session_state
 
 
 def _initialize_session_state():
-    """Inicializa los estados de sesión necesarios."""
-    if 'last_compared_isins' not in st.session_state:
-        st.session_state.last_compared_isins = []
-    if 'last_start_date' not in st.session_state:
-        st.session_state.last_start_date = None
-    if 'last_date_mode' not in st.session_state:
-        st.session_state.last_date_mode = None
-    if 'should_show_comparison' not in st.session_state:
-        st.session_state.should_show_comparison = False
-    if 'last_fig' not in st.session_state:
-        st.session_state.last_fig = None
-    if 'last_html_bytes' not in st.session_state:
-        st.session_state.last_html_bytes = None
+    """Initializes necessary session states."""
+    init_session_state({
+        'last_compared_isins': [],
+        'last_start_date': None,
+        'last_date_mode': None,
+        'should_show_comparison': False,
+        'last_fig': None,
+        'last_html_bytes': None
+    })
 
 
 def _should_execute_comparison(compare_button: bool, isins: list, start_date: str, date_mode: str) -> bool:
     """
-    Determina si se debe ejecutar una nueva comparación.
+    Determines if a new comparison should be executed.
 
     Args:
-        compare_button: Si se presionó el botón de comparar
-        isins: Lista de ISINs actuales
-        start_date: Fecha de inicio actual
-        date_mode: Modo de fecha actual
+        compare_button: Whether the compare button was pressed.
+        isins: Current list of ISINs.
+        start_date: Current start date.
+        date_mode: Current date mode.
 
     Returns:
-        True si se debe ejecutar la comparación
+        True if comparison should be executed.
     """
-    # Detectar cambios
+    # Detect changes
     date_changed = st.session_state.last_start_date != start_date
     date_mode_changed = st.session_state.last_date_mode != date_mode
     isins_changed = st.session_state.last_compared_isins != isins
 
-    # Detectar si cambió a un modo automático
+    # Detect if changed to an auto mode
     changed_to_auto_mode = (date_mode_changed and
                             date_mode in ["Histórico completo", "Usar fecha de inicio común"])
 
-    # Ejecutar comparación si:
+    # Execute comparison if:
     if compare_button:
         return True
     elif st.session_state.should_show_comparison and date_changed and not date_mode_changed:
-        # Solo si la fecha cambió dentro del mismo modo Y no cambiaron los ISINs
+        # Only if date changed within the same mode AND ISINs didn't change
         return not isins_changed
     elif st.session_state.should_show_comparison and changed_to_auto_mode:
-        # Solo si no cambiaron los ISINs
+        # Only if ISINs didn't change
         return not isins_changed
 
     return False
@@ -67,37 +64,37 @@ def _should_execute_comparison(compare_button: bool, isins: list, start_date: st
 
 def _execute_comparison(isins: list, start_date: str, date_mode: str):
     """
-    Ejecuta la comparación de fondos y muestra los resultados.
+    Executes the funds comparison and shows results.
 
     Args:
-        isins: Lista de ISINs a comparar
-        start_date: Fecha de inicio de la comparación
-        date_mode: Modo de fecha seleccionado
+        isins: List of ISINs to compare.
+        start_date: Start date of comparison.
+        date_mode: Selected date mode.
     """
-    # Guardar los valores actuales en session_state
+    # Save current values to session_state
     st.session_state.last_compared_isins = isins.copy()
     st.session_state.last_start_date = start_date
     st.session_state.last_date_mode = date_mode
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Obtener datos de fondos
+    # Get fund data
     funds_info = get_funds_for_comparison(isins, start_date)
 
     if not funds_info:
-        st.warning("No se pudieron cargar datos de ningún fondo o no hay fechas comunes.")
+        st.warning("Could not load data for any fund or no common dates found.")
         st.session_state.last_fig = None
         st.session_state.last_html_bytes = None
     else:
-        # Generar gráfico
+        # Generate chart
         fig = plot_funds(funds_info, start_date)
         html_bytes = fig.to_html(include_plotlyjs='cdn')
 
-        # Guardar en session_state
+        # Save to session_state
         st.session_state.last_fig = fig
         st.session_state.last_html_bytes = html_bytes
 
-        # Mostrar gráfico y botón de descarga
+        # Show chart and download button
         st.plotly_chart(fig, width='stretch')
         st.download_button(
             label="Descargar gráfico como HTML",
@@ -109,17 +106,17 @@ def _execute_comparison(isins: list, start_date: str, date_mode: str):
 
 def _show_cached_comparison(date_mode: str):
     """
-    Muestra la última gráfica guardada sin recalcular.
+    Shows the last saved chart without recalculating.
 
     Args:
-        date_mode: Modo de fecha actual
+        date_mode: Current date mode.
     """
     if st.session_state.last_date_mode != date_mode:
         st.session_state.last_date_mode = date_mode
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Mostrar la gráfica guardada
+    # Show saved chart
     st.plotly_chart(st.session_state.last_fig, width='stretch')
     st.download_button(
         label="Descargar gráfico como HTML",
@@ -131,24 +128,24 @@ def _show_cached_comparison(date_mode: str):
 
 
 def render_tab_funds():
-    """Renderiza la pestaña de comparación de fondos."""
+    """Renders the funds comparison tab."""
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Inicializar estados de sesión
+    # Initialize session states
     _initialize_session_state()
 
-    # Renderizar inputs de fondos
+    # Render fund inputs
     isins = render_funds_inputs("funds")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Mostrar mensajes informativos ANTES del botón
+    # Show info messages BEFORE button
     if not isins or len(isins) == 0:
-        st.info("Añade al menos un fondo para ver la comparación.")
+        st.info("Add at least one fund to view comparison.")
     elif not st.session_state.should_show_comparison:
-        st.info("Pulsa 'Comparar fondos' para ver la comparación.")
+        st.info("Press 'Compare funds' to view comparison.")
 
-    # Botón de comparar
+    # Compare button
     compare_button = st.button(
         "Comparar fondos",
         key="fund_compare_btn",
@@ -157,12 +154,12 @@ def render_tab_funds():
         use_container_width=True
     )
 
-    # Si hay ISINs y ya se ha hecho una comparación, mostrar selector de fecha
+    # If there are ISINs and a comparison has been made, show date selector
     if isins and len(isins) > 0 and st.session_state.should_show_comparison:
         start_date = render_funds_date_selector("funds", isins)
         current_date_mode = st.session_state.get("funds_date_mode", "Usar fecha de inicio común")
 
-        # Determinar si ejecutar comparación
+        # Determine if comparison should be executed
         should_compare = _should_execute_comparison(
             compare_button, isins, start_date, current_date_mode
         )
@@ -172,10 +169,10 @@ def render_tab_funds():
         elif st.session_state.last_fig is not None:
             _show_cached_comparison(current_date_mode)
 
-    # Primera comparación (cuando se pulsa el botón por primera vez)
+    # First comparison (when button is pressed for the first time)
     elif compare_button and isins and len(isins) > 0:
         st.session_state.should_show_comparison = True
-        # Obtener la fecha por defecto para la primera comparación
+        # Get default date for first comparison
         start_date = render_funds_date_selector("funds", isins)
         current_date_mode = st.session_state.get("funds_date_mode", "Usar fecha de inicio común")
         _execute_comparison(isins, start_date, current_date_mode)

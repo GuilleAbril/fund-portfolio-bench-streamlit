@@ -4,7 +4,6 @@ Aplicación Streamlit para comparar fondos y carteras de inversión.
 # TODO:
 #  meterle como argumento el path a la data o un env para que lo coja del fichero de config.
 #  Meter una fecha fin, que sea hasta donde se haga la comparación. (de momento hasta el viernes de la semana anterior, tener una semana para cargar datos)
-#  Adaptar carteras para que se muestre igual que fondos.
 
 import sys
 from pathlib import Path

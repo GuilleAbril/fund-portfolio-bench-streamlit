@@ -1,5 +1,5 @@
 """
-Componentes de interfaz de usuario para la gestión de carteras.
+UI components for portfolio management.
 """
 import sys
 from pathlib import Path
@@ -14,14 +14,15 @@ from typing import List, Dict, Optional
 from compare_funds.compare_funds import get_funds_metadata, fund_exists
 from streamlit_app.config import MAX_FUNDS, MAX_PORTFOLIOS, PORTFOLIO_COLORS
 from streamlit_app.utils.database_utils import get_max_common_start_date
+from streamlit_app.utils.common import calculate_date_from_period
 
 
 def render_portfolios_inputs() -> List[Dict]:
     """
-    Renderiza cajas de carteras y retorna lista de carteras válidas.
+    Renders portfolio input boxes and returns a list of valid portfolios.
 
     Returns:
-        Lista de diccionarios con información de cada cartera:
+        List of dictionaries with portfolio information:
         {
             'name': str,
             'funds': List[{'isin': str, 'weight': float, 'name': str}],
@@ -31,7 +32,7 @@ def render_portfolios_inputs() -> List[Dict]:
     """
     portfolios = []
 
-    # Estado para controlar cuántos fondos tiene cada cartera
+    # State to control how many funds each portfolio has
     if "portfolio_fund_counts" not in st.session_state:
         st.session_state.portfolio_fund_counts = [1] * MAX_PORTFOLIOS
 
@@ -40,12 +41,12 @@ def render_portfolios_inputs() -> List[Dict]:
     for p_idx in range(MAX_PORTFOLIOS):
         col = cols[p_idx]
 
-        # Input para el nombre de la cartera
+        # Input for portfolio name
         portfolio_name = col.text_input(
-            "Nombre de la cartera",
-            value=f"Cartera {p_idx + 1}",
+            "Portfolio Name",
+            value=f"Portfolio {p_idx + 1}",
             key=f"portfolio_{p_idx}_name",
-            placeholder="Nombre personalizado"
+            placeholder="Custom Name"
         )
 
         col.markdown(
@@ -65,14 +66,14 @@ def render_portfolios_inputs() -> List[Dict]:
 
             isin = input_cols[0].text_input(
                 "ISIN",
-                placeholder=f"ISIN fondo {f_idx + 1}",
+                placeholder=f"ISIN fund {f_idx + 1}",
                 key=f"portfolio_{p_idx}_isin_{f_idx}",
                 max_chars=12,
                 label_visibility="visible" if f_idx == 0 else "hidden"
             ).strip().upper()
 
             weight = input_cols[1].number_input(
-                "Peso %",
+                "Weight %",
                 min_value=0.0,
                 max_value=100.0,
                 step=1.0,
@@ -98,18 +99,18 @@ def render_portfolios_inputs() -> List[Dict]:
                         unsafe_allow_html=True
                     )
 
-        # Indicador de peso total
+        # Total weight indicator
         _render_weight_indicator(col, total_weight)
 
-        # Botón añadir fondo
+        # Button to add fund
         if num_funds < MAX_FUNDS:
-            if col.button("+ Añadir fondo", key=f"add_fund_{p_idx}"):
+            if col.button("+ Add fund", key=f"add_fund_{p_idx}"):
                 st.session_state.portfolio_fund_counts[p_idx] += 1
                 st.rerun()
 
         col.markdown('</div>', unsafe_allow_html=True)
 
-        # Añadir cartera a la lista si es válida
+        # Add portfolio to list if valid
         if funds and abs(total_weight - 100.0) < 0.01:
             portfolio_start_date = get_max_common_start_date(portfolio_isins)
             portfolios.append({
@@ -124,11 +125,11 @@ def render_portfolios_inputs() -> List[Dict]:
 
 def _render_weight_indicator(col, total_weight: float):
     """
-    Renderiza el indicador de peso total de una cartera.
+    Renders the total weight indicator for a portfolio.
 
     Args:
-        col: Columna de Streamlit donde renderizar
-        total_weight: Peso total de la cartera
+        col: Streamlit column to render in.
+        total_weight: Total weight of the portfolio.
     """
     if total_weight > 0:
         if abs(total_weight - 100.0) < 0.01:
@@ -143,76 +144,44 @@ def _render_weight_indicator(col, total_weight: float):
 
         col.markdown(
             f'<div class="weight-indicator {css_class}">'
-            f'{symbol} Peso total: {total_weight:.1f}%</div>',
+            f'{symbol} Total weight: {total_weight:.1f}%</div>',
             unsafe_allow_html=True
         )
 
 
-def _calculate_date_from_period(period: str, min_start_date: str) -> str:
-    """
-    Calcula la fecha de inicio basada en el período seleccionado.
-
-    Args:
-        period: Período seleccionado (YTD, 1A, 3A, 5A)
-        min_start_date: Fecha mínima disponible
-
-    Returns:
-        Fecha en formato 'YYYY-MM-DD'
-    """
-    today = datetime.now().date()
-
-    if period == "YTD":
-        start_date = datetime(today.year, 1, 1).date()
-    elif period == "1A":
-        start_date = today - timedelta(days=365)
-    elif period == "3A":
-        start_date = today - timedelta(days=365 * 3)
-    elif period == "5A":
-        start_date = today - timedelta(days=365 * 5)
-    else:
-        start_date = today
-
-    if min_start_date:
-        min_date = datetime.strptime(min_start_date, '%Y-%m-%d').date()
-        if start_date < min_date:
-            start_date = min_date
-
-    return start_date.strftime('%Y-%m-%d')
-
-
 def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optional[List[str]], portfolios_structure: List[Dict]) -> Optional[str]:
     """
-    Renderiza selector de fecha y tipo de alineamiento para carteras.
+    Renders date selector and alignment type for portfolios.
 
     Args:
-        prefix: Prefijo para las keys de los componentes
-        portfolios_start_dates: Lista de fechas de inicio de las carteras
-        portfolios_structure: Estructura actual de las carteras para detectar cambios
+        prefix: Prefix for component keys.
+        portfolios_start_dates: List of portfolio start dates.
+        portfolios_structure: Current structure of portfolios to detect changes.
 
     Returns:
-        Fecha de inicio seleccionada en formato 'YYYY-MM-DD' o None
+        Selected start date in 'YYYY-MM-DD' format or None.
     """
-    # Calcular fecha mínima global (la fecha más antigua posible entre todas las carteras)
-    # y fecha común global (la fecha más reciente entre los inicios de todas las carteras)
+    # Calculate global minimum date (oldest possible date among all portfolios)
+    # and global common date (most recent date among all portfolio starts)
     min_start_date = None
     common_start_date_str = None
 
     if portfolios_start_dates:
-        # La fecha común válida para todos es el MAX de los inicios
+        # The common date valid for all is the MAX of the starts
         common_start_date_str = max(portfolios_start_dates)
         
-        # Para el "Histórico completo", queremos ver desde el principio de los tiempos de la cartera más antigua
-        # o al menos dar la opción de retroceder.
+        # For "Full History", we want to see from the beginning of time of the oldest portfolio
+        # or at least give the option to go back.
         min_start_date = min(portfolios_start_dates)
 
-    # Inicializar session_state
+    # Initialize session_state
     session_key_mode = f"{prefix}_date_selection"
     session_key_range = f"{prefix}_date_range"
     session_key_counter = f"{prefix}_date_counter"
     session_key_last_structure = f"{prefix}_last_structure"
 
-    # Detectar cambios en la estructura de las carteras
-    # Usamos una representación string o hashable de la estructura relevante (funds + weights)
+    # Detect changes in portfolio structure
+    # Use string representation or hashable of relevant structure (funds + weights)
     current_structure_repr = str([{p['name']: p['funds']} for p in portfolios_structure])
     
     structure_changed = False
@@ -222,7 +191,7 @@ def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optiona
     elif st.session_state[session_key_last_structure] != current_structure_repr:
         structure_changed = True
 
-    # Si cambió la estructura, resetear a fecha común
+    # If structure changed, reset to common date
     if structure_changed:
         st.session_state[session_key_last_structure] = current_structure_repr
         st.session_state[session_key_mode] = "Usar fecha de inicio común"
@@ -238,18 +207,18 @@ def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optiona
     if session_key_mode not in st.session_state:
         st.session_state[session_key_mode] = "Usar fecha de inicio común"
     if session_key_range not in st.session_state:
-        # Default a fecha común si existen datos
+        # Default to common date if data exists
         start_d = common_start_date_str if common_start_date_str else (min_start_date if min_start_date else None)
         common_date = datetime.strptime(start_d, '%Y-%m-%d').date() if start_d else datetime.now().date()
         st.session_state[session_key_range] = (common_date, datetime.now().date())
     if session_key_counter not in st.session_state:
         st.session_state[session_key_counter] = 0
 
-    st.markdown("**Fecha de inicio de comparación:**")
+    st.markdown("**Start date for comparison:**")
 
     cols = st.columns([2, 2.5, 0.8, 0.8, 0.8, 0.8, 4])
 
-    # Botón "Histórico completo": permite ver desde el inicio de la cartera más antigua
+    # "Full History" button: allows viewing from the start of the oldest portfolio
     if cols[0].button("Histórico completo", key=f"{prefix}_btn_historico", use_container_width=True):
         st.session_state[session_key_mode] = "Histórico completo"
         min_date = (datetime.strptime(min_start_date, '%Y-%m-%d').date()
@@ -258,7 +227,7 @@ def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optiona
         st.session_state[session_key_counter] += 1
         st.rerun()
 
-    # Botón "Usar fecha de inicio común"
+    # "Common Start Date" button
     if cols[1].button("Usar fecha de inicio común", key=f"{prefix}_btn_comun", use_container_width=True):
         st.session_state[session_key_mode] = "Usar fecha de inicio común"
         common_date = datetime.strptime(common_start_date_str, '%Y-%m-%d').date() if common_start_date_str else datetime.now().date()
@@ -266,12 +235,12 @@ def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optiona
         st.session_state[session_key_counter] += 1
         st.rerun()
 
-    # Botones de período
+    # Period buttons
     period_buttons = ["YTD", "1A", "3A", "5A"]
     for i, period in enumerate(period_buttons):
         if cols[i + 2].button(period, key=f"{prefix}_btn_{period}", use_container_width=True):
             st.session_state[session_key_mode] = period
-            calculated_start = _calculate_date_from_period(period, min_start_date)
+            calculated_start = calculate_date_from_period(period, min_start_date)
             st.session_state[session_key_range] = (
                 datetime.strptime(calculated_start, '%Y-%m-%d').date(),
                 datetime.now().date()
@@ -279,15 +248,15 @@ def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optiona
             st.session_state[session_key_counter] += 1
             st.rerun()
 
-    # Indicador
+    # Indicator
     current_mode = st.session_state[session_key_mode]
     if current_mode in ["Histórico completo", "Usar fecha de inicio común"]:
-        st.info(f"📅 Seleccionado: **{current_mode}**")
+        st.info(f"📅 Selected: **{current_mode}**")
     else:
-        st.info(f"📅 Período seleccionado: **{current_mode}**")
+        st.info(f"📅 Selected period: **{current_mode}**")
 
-    # Selectores de fecha manuales
-    # La fecha mínima permitida en el selector debe ser la mínima global (para permitir retroceder)
+    # Manual date selectors
+    # The minimum allowed date in the selector must be the global minimum (to allow backing up)
     min_date_obj = (datetime.strptime(min_start_date, '%Y-%m-%d').date()
                 if min_start_date else datetime(1990, 1, 1).date())
     today = datetime.now().date()
