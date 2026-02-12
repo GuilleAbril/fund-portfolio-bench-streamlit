@@ -58,13 +58,15 @@ def fund_exists(isin: str) -> bool:
 # CARGA DE DATOS (Parquet)
 # ─────────────────────────────────────────────
 
-def load_normalized_data_fund(isin: str, start_date: Optional[str] = None) -> Optional[pa.Table]:
+def load_normalized_data_fund(isin: str, start_date: Optional[str] = None, end_date: Optional[str] = None)\
+        -> Optional[pa.Table]:
     """
     Carga datos RAW de un fondo (sin normalizar).
     
     Args:
-        isin: ISIN del fondo
-        start_date: Fecha desde la que filtrar (opcional)
+        :param isin: ISIN del fondo
+        :param start_date: Fecha desde la que filtrar (opcional)
+        :param end_date: Fecha hasta la que comparar
         
     Returns:
         fund_data: pa.Table[date, total_return]
@@ -79,9 +81,11 @@ def load_normalized_data_fund(isin: str, start_date: Optional[str] = None) -> Op
 
         # Filtrar por fecha si se proporciona
         if start_date:
-            mask = pc.greater_equal(fund_data['date'], start_date)
-            fund_data = fund_data.filter(mask)
+            mask_greater = pc.greater_equal(fund_data['date'], start_date)
+            fund_data = fund_data.filter(mask_greater)
 
+        mask_less = pc.less_equal(fund_data['date'], end_date)
+        fund_data = fund_data.filter(mask_less)
         base_value = fund_data["total_return"][0]
         division = pc.divide(fund_data["total_return"], base_value)
         normalized_column = pc.multiply(division, pa.scalar(100.0))
@@ -116,7 +120,8 @@ def normalize_to_base_100(values: List[float]) -> List[float]:
 
 def get_funds_for_comparison(
         isins: List[str],
-        start_date: Optional[str] = None
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
 ) -> List[Dict]: #[str, str, pa.Table]
     """
     start_date: Optional[str] = None,
@@ -137,17 +142,23 @@ def get_funds_for_comparison(
         # Obtener nombre del metadata
         metadata = get_funds_metadata([isin])
         name = metadata.get(isin, {}).get('name', isin)
-        data = load_normalized_data_fund(isin, start_date)
+
+        # Calculate cagr
+        data = load_normalized_data_fund(isin, start_date, end_date)
         dates_parsed = pc.cast(data["date"], pa.date32())
         min_date = pc.min(dates_parsed)
         max_date = pc.max(dates_parsed)
         v_inicial = data["total_return"][0].as_py()
         v_final = data["total_return"][-1].as_py()
         n_years = pc.days_between(min_date, max_date).as_py() / 365.25
-        cagr = (v_final / v_inicial) ** (1 / n_years) - 1
+        if n_years >= 1:
+            cagr_performance = (v_final / v_inicial) ** (1 / n_years) - 1
+        else:
+            cagr_performance = (v_final / v_inicial) - 1
+
         if data:
             funds_info.append(
-                {'isin': isin, 'name': name, 'fund_data': data, 'cagr': cagr}
+                {'isin': isin, 'name': name, 'fund_data': data, 'cagr': cagr_performance}
             )
 
     if not funds_info:
@@ -220,17 +231,18 @@ def get_portfolio_for_comparison(
         portfolio: Dict,
         # portfolio -> {'name': f'Cartera {p_idx + 1}','funds': funds, 'portfolio_start_date': portfolio_start_date,'color': PORTFOLIO_COLORS[p_idx]}
         # funds: list({'isin': isin, 'weight': weight})
-        start_date_portfolios: Optional[str] = None
+        start_date_portfolios: Optional[str] = None, end_date: Optional[str] = None
 ) -> Optional[Dict]:
     """
     Prepara una cartera para comparación.
 
     Args:
-        portfolio: Dict con 'name', 'funds': [{'isin': '...', 'weight': 50.0}, ...]
-        start_date_portfolios: Fecha desde la que cargar datos
+        :param portfolio: Dict con 'name', 'funds': [{'isin': '...', 'weight': 50.0}, ...]
+        :param start_date_portfolios: Fecha desde la que cargar datos
+        :param end_date:
     Returns:
         'name': portfolio['name'],
-        'portfolio_total_return': pa.Table["date", "total_return"]
+
     """
     # Validar que pesos sumen 100%
     total_weight = sum(f['weight'] for f in portfolio['funds'])
@@ -246,7 +258,7 @@ def get_portfolio_for_comparison(
     # Cargar fondos de la cartera
     funds_info = []
     for fund in portfolio['funds']:
-        data = load_normalized_data_fund(fund['isin'], start_date)
+        data = load_normalized_data_fund(fund['isin'], start_date, end_date)
         if data:
             funds_info.append({
                 'weight': fund['weight'] / 100.0,  # Convertir a decimal
@@ -258,31 +270,36 @@ def get_portfolio_for_comparison(
 
     portfolio_weighted_total_return = weight_portfolio_funds(funds_info)
 
+    # Calculate cagr
     dates_parsed = pc.cast(portfolio_weighted_total_return["date"], pa.date32())
     min_date = pc.min(dates_parsed)
     max_date = pc.max(dates_parsed)
     v_inicial = portfolio_weighted_total_return["total_return"][0].as_py()
     v_final = portfolio_weighted_total_return["total_return"][-1].as_py()
     n_years = pc.days_between(min_date, max_date).as_py() / 365.25
-    cagr = (v_final / v_inicial) ** (1 / n_years) - 1
+    if n_years >= 1:
+        cagr_performance = (v_final / v_inicial) ** (1 / n_years) - 1
+    else:
+        cagr_performance = (v_final / v_inicial) - 1
 
     return {
         'name': portfolio['name'],
         'portfolio_total_return': portfolio_weighted_total_return,
-        'cagr': cagr
+        'cagr': cagr_performance
     }
 
 
 def get_portfolios_for_comparison(
         portfolios: List[Dict], # lista de dicts con isins, pesos y fecha de comienzo de cada portfolio (el min de su fondo más reciente)
-        start_date_portfolios: Optional[str] = None
+        start_date_portfolios: Optional[str] = None, end_date: Optional[str] = None
 ) -> List[Dict[str, pa.Table]]:
     """
     Prepara múltiples carteras para comparación.
 
     Args:
-        portfolios: Lista de carteras
-        start_date_portfolios: Fecha desde la que cargar datos
+        :param portfolios:
+        :param start_date_portfolios:
+        :param end_date:
 
     Returns:
         List [
@@ -294,7 +311,7 @@ def get_portfolios_for_comparison(
     for portfolio in portfolios:
         # portfolio -> {'name': f'Cartera {p_idx + 1}','funds': funds, 'portfolio_start_date': portfolio_start_date,'color': PORTFOLIO_COLORS[p_idx]}
         # funds: list({'isin': isin, 'weight': weight})
-        portfolio_info = get_portfolio_for_comparison(portfolio, start_date_portfolios) #{name: str, portfolio_total_return: Table[date, total_return]}
+        portfolio_info = get_portfolio_for_comparison(portfolio, start_date_portfolios, end_date) #{name: str, portfolio_total_return: Table[date, total_return]}
         if portfolio_info:
             result.append(portfolio_info)
 

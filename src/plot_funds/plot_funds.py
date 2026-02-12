@@ -99,14 +99,14 @@ def plot_funds(
             x=fund_data['date'].to_pylist(),
             y=profitability.to_pylist(),
             mode='lines',
-            name=label + f" (CAGR: {cagr_str})",
+            name=label + f" (CAGR / Rentabilidad periodo: {cagr_str})",
             line=dict(
                 width=2,
                 color=FUND_COLORS[idx % len(FUND_COLORS)]
             ),
             hovertemplate=f"<b>{label}</b><br>"
                           f"Rentabilidad: %{{y:.2f}}%<br>"
-                          f"Rentabilidad anualizada total: <b>{cagr_str}</b><extra></extra>"
+                          f"Rentabilidad anualizada total / Rentabilidad periodo (<1y): <b>{cagr_str}</b><extra></extra>"
         ))
 
     # Título dinámico (más corto y sin "Base 100")
@@ -176,14 +176,14 @@ def plot_portfolios(
             x=portfolio.get("portfolio_total_return")['date'].to_pylist(),
             y=profitability.to_pylist(),
             mode='lines',
-            name=portfolio['name']  + f" (CAGR: {cagr_str})",
+            name=portfolio['name']  + f" (CAGR / Rentabilidad periodo: {cagr_str})",
             line=dict(
                 width=2.5,
                 color=PORTFOLIO_COLORS[idx % len(PORTFOLIO_COLORS)]
             ),
             hovertemplate=f"<b>{portfolio['name']}</b><br>"
                           f"Rentabilidad: %{{y:.2f}}%<br>"
-                          f"Rentabilidad anualizada total: <b>{cagr_str}</b><extra></extra>"
+                          f"Rentabilidad anualizada total / Rentabilidad periodo (<1y): <b>{cagr_str}</b><extra></extra>"
         ))
 
     # Título dinámico

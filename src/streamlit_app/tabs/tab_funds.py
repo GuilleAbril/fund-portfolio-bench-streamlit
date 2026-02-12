@@ -20,6 +20,7 @@ def _initialize_session_state():
     init_session_state({
         'last_compared_isins': [],
         'last_start_date': None,
+        'last_end_date': None,
         'last_date_mode': None,
         'should_show_comparison': False,
         'last_fig': None,
@@ -27,7 +28,7 @@ def _initialize_session_state():
     })
 
 
-def _should_execute_comparison(compare_button: bool, isins: list, start_date: str, date_mode: str) -> bool:
+def _should_execute_comparison(compare_button: bool, isins: list, start_date: str, end_date: str, date_mode: str) -> bool:
     """
     Determines if a new comparison should be executed.
 
@@ -41,7 +42,7 @@ def _should_execute_comparison(compare_button: bool, isins: list, start_date: st
         True if comparison should be executed.
     """
     # Detect changes
-    date_changed = st.session_state.last_start_date != start_date
+    date_changed = st.session_state.last_start_date != start_date or st.session_state.last_end_date != end_date
     date_mode_changed = st.session_state.last_date_mode != date_mode
     isins_changed = st.session_state.last_compared_isins != isins
 
@@ -62,7 +63,7 @@ def _should_execute_comparison(compare_button: bool, isins: list, start_date: st
     return False
 
 
-def _execute_comparison(isins: list, start_date: str, date_mode: str):
+def _execute_comparison(isins: list, start_date: str, end_date: str, date_mode: str):
     """
     Executes the funds comparison and shows results.
 
@@ -74,12 +75,13 @@ def _execute_comparison(isins: list, start_date: str, date_mode: str):
     # Save current values to session_state
     st.session_state.last_compared_isins = isins.copy()
     st.session_state.last_start_date = start_date
+    st.session_state.last_end_date = end_date
     st.session_state.last_date_mode = date_mode
 
     st.markdown("<br>", unsafe_allow_html=True)
 
     # Get fund data
-    funds_info = get_funds_for_comparison(isins, start_date)
+    funds_info = get_funds_for_comparison(isins, start_date, end_date)
 
     if not funds_info:
         st.warning("Could not load data for any fund or no common dates found.")
@@ -156,16 +158,16 @@ def render_tab_funds():
 
     # If there are ISINs and a comparison has been made, show date selector
     if isins and len(isins) > 0 and st.session_state.should_show_comparison:
-        start_date = render_funds_date_selector("funds", isins)
+        start_date, end_date = render_funds_date_selector("funds", isins)
         current_date_mode = st.session_state.get("funds_date_mode", "Usar fecha de inicio común")
 
         # Determine if comparison should be executed
         should_compare = _should_execute_comparison(
-            compare_button, isins, start_date, current_date_mode
+            compare_button, isins, start_date, end_date, current_date_mode
         )
 
         if should_compare:
-            _execute_comparison(isins, start_date, current_date_mode)
+            _execute_comparison(isins, start_date, end_date, current_date_mode)
         elif st.session_state.last_fig is not None:
             _show_cached_comparison(current_date_mode)
 
@@ -173,6 +175,6 @@ def render_tab_funds():
     elif compare_button and isins and len(isins) > 0:
         st.session_state.should_show_comparison = True
         # Get default date for first comparison
-        start_date = render_funds_date_selector("funds", isins)
+        start_date, end_date = render_funds_date_selector("funds", isins)
         current_date_mode = st.session_state.get("funds_date_mode", "Usar fecha de inicio común")
-        _execute_comparison(isins, start_date, current_date_mode)
+        _execute_comparison(isins, start_date, end_date, current_date_mode)

@@ -8,13 +8,13 @@ src_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(src_dir))
 
 import streamlit as st
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from typing import List, Dict, Optional
 
 from compare_funds.compare_funds import get_funds_metadata, fund_exists
 from streamlit_app.config import MAX_FUNDS, MAX_PORTFOLIOS, PORTFOLIO_COLORS
 from streamlit_app.utils.database_utils import get_max_common_start_date
-from streamlit_app.utils.common import calculate_date_from_period
+from streamlit_app.utils.common import calculate_date_from_period, get_default_end_date
 
 
 def render_portfolios_inputs() -> List[Dict]:
@@ -149,7 +149,8 @@ def _render_weight_indicator(col, total_weight: float):
         )
 
 
-def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optional[List[str]], portfolios_structure: List[Dict]) -> Optional[str]:
+def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optional[List[str]], portfolios_structure: List[Dict])\
+        -> Optional[tuple[str, str]]:
     """
     Renders date selector and alignment type for portfolios.
 
@@ -169,6 +170,7 @@ def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optiona
     if portfolios_start_dates:
         # The common date valid for all is the MAX of the starts
         common_start_date_str = max(portfolios_start_dates)
+        default_end_date = get_default_end_date()
         
         # For "Full History", we want to see from the beginning of time of the oldest portfolio
         # or at least give the option to go back.
@@ -196,8 +198,8 @@ def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optiona
         st.session_state[session_key_last_structure] = current_structure_repr
         st.session_state[session_key_mode] = "Usar fecha de inicio común"
         
-        common_date = datetime.strptime(common_start_date_str, '%Y-%m-%d').date() if common_start_date_str else datetime.now().date()
-        st.session_state[session_key_range] = (common_date, datetime.now().date())
+        common_date = datetime.strptime(common_start_date_str, '%Y-%m-%d').date() if common_start_date_str else default_end_date
+        st.session_state[session_key_range] = (common_date, default_end_date)
         
         if session_key_counter not in st.session_state:
             st.session_state[session_key_counter] = 0
@@ -209,8 +211,8 @@ def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optiona
     if session_key_range not in st.session_state:
         # Default to common date if data exists
         start_d = common_start_date_str if common_start_date_str else (min_start_date if min_start_date else None)
-        common_date = datetime.strptime(start_d, '%Y-%m-%d').date() if start_d else datetime.now().date()
-        st.session_state[session_key_range] = (common_date, datetime.now().date())
+        common_date = datetime.strptime(start_d, '%Y-%m-%d').date() if start_d else default_end_date
+        st.session_state[session_key_range] = (common_date, default_end_date)
     if session_key_counter not in st.session_state:
         st.session_state[session_key_counter] = 0
 
@@ -223,15 +225,15 @@ def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optiona
         st.session_state[session_key_mode] = "Histórico completo"
         min_date = (datetime.strptime(min_start_date, '%Y-%m-%d').date()
                     if min_start_date else datetime(1990, 1, 1).date())
-        st.session_state[session_key_range] = (min_date, datetime.now().date())
+        st.session_state[session_key_range] = (min_date, default_end_date)
         st.session_state[session_key_counter] += 1
         st.rerun()
 
     # "Common Start Date" button
     if cols[1].button("Usar fecha de inicio común", key=f"{prefix}_btn_comun", use_container_width=True):
         st.session_state[session_key_mode] = "Usar fecha de inicio común"
-        common_date = datetime.strptime(common_start_date_str, '%Y-%m-%d').date() if common_start_date_str else datetime.now().date()
-        st.session_state[session_key_range] = (common_date, datetime.now().date())
+        common_date = datetime.strptime(common_start_date_str, '%Y-%m-%d').date() if common_start_date_str else default_end_date
+        st.session_state[session_key_range] = (common_date, default_end_date)
         st.session_state[session_key_counter] += 1
         st.rerun()
 
@@ -243,7 +245,7 @@ def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optiona
             calculated_start = calculate_date_from_period(period, min_start_date)
             st.session_state[session_key_range] = (
                 datetime.strptime(calculated_start, '%Y-%m-%d').date(),
-                datetime.now().date()
+                default_end_date
             )
             st.session_state[session_key_counter] += 1
             st.rerun()
@@ -259,7 +261,6 @@ def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optiona
     # The minimum allowed date in the selector must be the global minimum (to allow backing up)
     min_date_obj = (datetime.strptime(min_start_date, '%Y-%m-%d').date()
                 if min_start_date else datetime(1990, 1, 1).date())
-    today = datetime.now().date()
 
     col1, col2 = st.columns(2)
     counter = st.session_state[session_key_counter]
@@ -269,7 +270,7 @@ def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optiona
             "Fecha desde",
             value=st.session_state[session_key_range][0],
             min_value=min_date_obj,
-            max_value=today,
+            max_value=default_end_date,
             key=f"{prefix}_custom_start_date_{counter}"
         )
 
@@ -278,10 +279,13 @@ def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optiona
             "Fecha hasta",
             value=st.session_state[session_key_range][1],
             min_value=min_date_obj,
-            max_value=today,
+            max_value=default_end_date,
             key=f"{prefix}_custom_end_date_{counter}"
         )
 
     st.session_state[session_key_range] = (start_date_input, end_date_input)
+    # Return start and end date
+    start_date = start_date_input.strftime('%Y-%m-%d')
+    end_date = end_date_input.strftime('%Y-%m-%d')
     
-    return start_date_input.strftime('%Y-%m-%d')
+    return start_date, end_date

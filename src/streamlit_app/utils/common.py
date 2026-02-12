@@ -51,3 +51,31 @@ def init_session_state(keys_defaults: dict[str, Any]) -> None:
     for key, default_value in keys_defaults.items():
         if key not in st.session_state:
             st.session_state[key] = default_value
+
+
+def get_default_end_date() -> datetime.date:
+    """
+    Returns the default end date for comparisons.
+    Logic: The Friday of the week that ended 2 weeks ago.
+    Example:
+    - If today is Fri 13 Feb, 2 weeks ago was Fri 30 Jan.
+    - If today is Sat 14 Feb, 2 weeks ago was Fri 30 Jan.
+    - If today is Fri 20 Feb, 2 weeks ago was Fri 6 Feb.
+
+    Basically: Go to last Friday, then subtract 14 days.
+    """
+    today = datetime.now().date()
+
+    # Calculate days to subtract to get to the most recent Friday (including today)
+    # Weekday: Mon=0, ..., Fri=4, ..., Sun=6
+    # If today is Friday (4), subtract 0.
+    # If today is Saturday (5), subtract 1.
+    # If today is Thursday (3), subtract 6 (go back to previous week Friday).
+
+    days_to_last_friday = (today.weekday() - 4) % 7
+    last_friday = today - timedelta(days=days_to_last_friday)
+
+    # Subtract 2 weeks (14 days)
+    default_end_date = last_friday - timedelta(days=7)
+
+    return default_end_date

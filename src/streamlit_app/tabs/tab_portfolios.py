@@ -21,6 +21,8 @@ def _initialize_session_state():
         st.session_state.last_compared_portfolios = []
     if 'last_portfolios_start_date' not in st.session_state:
         st.session_state.last_portfolios_start_date = None
+    if 'last_portfolios_end_date' not in st.session_state:
+        st.session_state.last_portfolios_end_date = None
     if 'last_portfolios_date_mode' not in st.session_state:
         st.session_state.last_portfolios_date_mode = None
     if 'should_show_portfolios_comparison' not in st.session_state:
@@ -31,7 +33,7 @@ def _initialize_session_state():
         st.session_state.last_portfolios_html_bytes = None
 
 
-def _should_execute_comparison(compare_button: bool, portfolios: list, start_date: str, date_mode: str) -> bool:
+def _should_execute_comparison(compare_button: bool, portfolios: list, start_date: str, end_date: str, date_mode: str) -> bool:
     """
     Determina si se debe ejecutar una nueva comparación de carteras.
     """
@@ -43,13 +45,9 @@ def _should_execute_comparison(compare_button: bool, portfolios: list, start_dat
     if st.session_state.last_compared_portfolios:
          last_structure_repr = str([{p['name']: p['funds']} for p in st.session_state.last_compared_portfolios])
 
-    date_changed = st.session_state.last_portfolios_start_date != start_date
+    date_changed = st.session_state.last_portfolios_start_date != start_date or st.session_state.last_portfolios_end_date != end_date
     date_mode_changed = st.session_state.last_portfolios_date_mode != date_mode
     structure_changed = current_structure_repr != last_structure_repr
-
-    # Detectar si cambió a un modo automático (YA NO ES NECESARIO RESTRINGIR)
-    # changed_to_auto_mode = (date_mode_changed and
-    #                         date_mode in ["Histórico completo", "Usar fecha de inicio común"])
 
     if compare_button:
         return True
@@ -63,12 +61,13 @@ def _should_execute_comparison(compare_button: bool, portfolios: list, start_dat
     return False
 
 
-def _execute_comparison(portfolios: list, start_date: str, date_mode: str):
+def _execute_comparison(portfolios: list, start_date: str, end_date: str, date_mode: str):
     """
     Ejecuta la comparación de carteras y muestra los resultados.
     """
     st.session_state.last_compared_portfolios = portfolios
     st.session_state.last_portfolios_start_date = start_date
+    st.session_state.last_portfolios_end_date = end_date
     st.session_state.last_portfolios_date_mode = date_mode
 
     st.markdown("<br>", unsafe_allow_html=True)
@@ -76,7 +75,8 @@ def _execute_comparison(portfolios: list, start_date: str, date_mode: str):
     # Obtener datos de carteras (ya tienen sus fechas de inicio calculadas)
     portfolios_info = get_portfolios_for_comparison(
         portfolios, 
-        start_date
+        start_date,
+        end_date
     )
 
     if not portfolios_info:
@@ -165,7 +165,7 @@ def render_tab_portfolios():
             if compare_button:
                 st.session_state.should_show_portfolios_comparison = True
 
-            start_date = render_portfolios_date_selector("portfolios", portfolios_start_dates, portfolios)
+            start_date, end_date = render_portfolios_date_selector("portfolios", portfolios_start_dates, portfolios)
             current_date_mode = st.session_state.get("portfolios_date_selection", "Usar fecha de inicio común")
 
             # Lógica para determinar si enviamos una fecha específica o None (histórico completo real por cartera)
@@ -176,10 +176,10 @@ def render_tab_portfolios():
                     comparison_start_date = None
 
             should_compare = _should_execute_comparison(
-                compare_button, portfolios, comparison_start_date, current_date_mode
+                compare_button, portfolios, comparison_start_date, end_date, current_date_mode
             )
 
             if should_compare:
-                _execute_comparison(portfolios, comparison_start_date, current_date_mode)
+                _execute_comparison(portfolios, comparison_start_date, end_date, current_date_mode)
             elif st.session_state.last_portfolios_fig is not None:
                 _show_cached_comparison(current_date_mode)
