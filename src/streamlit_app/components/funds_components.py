@@ -94,7 +94,7 @@ def render_funds_date_selector(prefix: str, isins: List[str]) -> Optional[tuple[
         
         # Calculate common date
         common_date_str = get_max_common_start_date(isins)
-        common_date = datetime.strptime(common_date_str, '%Y-%m-%d').date() if common_date_str else datetime.now().date()
+        common_date = datetime.strptime(common_date_str, '%Y-%m-%d').date()
         
         st.session_state[session_key_range] = (common_date, default_end_date)
         
@@ -110,7 +110,7 @@ def render_funds_date_selector(prefix: str, isins: List[str]) -> Optional[tuple[
     if session_key_range not in st.session_state:
         # Fallback for safety
         common_date_str = get_max_common_start_date(isins)
-        common_date = datetime.strptime(common_date_str, '%Y-%m-%d').date() if common_date_str else datetime.now().date()
+        common_date = datetime.strptime(common_date_str, '%Y-%m-%d').date()
         st.session_state[session_key_range] = (common_date, default_end_date)
     if session_key_counter not in st.session_state:
         st.session_state[session_key_counter] = 0
@@ -135,7 +135,7 @@ def render_funds_date_selector(prefix: str, isins: List[str]) -> Optional[tuple[
         st.session_state[session_key_mode] = "Usar fecha de inicio común"
         # Set range from common date to today
         common_date_str = get_max_common_start_date(isins)
-        common_date = datetime.strptime(common_date_str, '%Y-%m-%d').date() if common_date_str else datetime.now().date()
+        common_date = datetime.strptime(common_date_str, '%Y-%m-%d').date()
         st.session_state[session_key_range] = (common_date, default_end_date)
         st.session_state[session_key_counter] += 1
         st.rerun()
@@ -157,9 +157,9 @@ def render_funds_date_selector(prefix: str, isins: List[str]) -> Optional[tuple[
     # Show visual indicator of what is selected
     current_mode = st.session_state[session_key_mode]
     if current_mode in ["Histórico completo", "Usar fecha de inicio común"]:
-        st.info(f"📅 Selected: **{current_mode}**")
+        st.info(f"📅 **{current_mode}**")
     else:
-        st.info(f"📅 Selected period: **{current_mode}**")
+        st.info(f"📅 Periodo seleccionado: **{current_mode}**")
 
     # Date range selector (ALWAYS VISIBLE)
     min_date = (datetime.strptime(min_start_date, '%Y-%m-%d').date()

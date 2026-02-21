@@ -1,5 +1,5 @@
 """
-Módulo de pestañas de la aplicación.
+Application tabs module.
 """
 from .tab_funds import render_tab_funds
 from .tab_portfolios import render_tab_portfolios

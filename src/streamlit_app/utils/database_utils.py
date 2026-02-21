@@ -5,7 +5,7 @@ import sqlite3
 from typing import Optional, List
 from pathlib import Path
 
-from streamlit_app.config import METADATA_DB_PATH
+from streamlit_app.config import METADATA_DB_PATH, PROJECT_ROOT_PATH
 
 
 def get_max_common_start_date(isins: List[str]) -> Optional[str]:
@@ -19,6 +19,7 @@ def get_max_common_start_date(isins: List[str]) -> Optional[str]:
         Date in 'YYYY-MM-DD' format or None if not found.
     """
     metadata_path = Path(METADATA_DB_PATH)
+
     if not metadata_path.exists():
         return None
 

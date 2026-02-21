@@ -1,11 +1,11 @@
 """
-Estilos CSS personalizados para la aplicación Streamlit.
+Custom CSS styles for the Streamlit application.
 """
 import streamlit as st
 
 
 def apply_custom_styles():
-    """Aplica los estilos CSS personalizados a la aplicación."""
+    """Applies custom CSS styles to the Streamlit application."""
     st.markdown("""
     <style>
         .stApp {
@@ -55,7 +55,7 @@ def apply_custom_styles():
             font-weight: 600;
         }
         
-        /* Ocultar instrucciones de ayuda en inputs */
+        /* Hide help instructions on inputs */
         .stTextInput [data-testid="InputInstructions"],
         .stTextInput .st-emotion-cache-1wmy9hl {
             display: none !important;
@@ -77,7 +77,7 @@ def apply_custom_styles():
             border-bottom: 1px solid #2a2f4a;
         }
 
-        /* Estilos para botones normales */
+        /* Default button styles */
         .stButton button {
             background: transparent;
             border: 1px dashed #2a2f4a;
@@ -94,7 +94,7 @@ def apply_custom_styles():
             color: #3b82f6;
         }
 
-        /* Estilos para botones primarios (como "Comparar fondos") */
+        /* Primary button styles */
         .stButton button[kind="primary"] {
             background: #1e3a8a;
             border: 1px solid #3b82f6;
@@ -121,7 +121,7 @@ def apply_custom_styles():
             opacity: 0.5;
         }
 
-        /* Estilos para checkboxes */
+        /* Checkbox styles */
         .stCheckbox {
             color: #e2e8f0;
         }

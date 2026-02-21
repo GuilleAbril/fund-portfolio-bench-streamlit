@@ -76,6 +76,6 @@ def get_default_end_date() -> datetime.date:
     last_friday = today - timedelta(days=days_to_last_friday)
 
     # Subtract 2 weeks (14 days)
-    default_end_date = last_friday - timedelta(days=7)
+    default_end_date = last_friday - timedelta(days=14)
 
     return default_end_date

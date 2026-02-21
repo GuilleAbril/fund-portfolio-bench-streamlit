@@ -1,5 +1,5 @@
 """
-Módulo de utilidades para la aplicación.
+Application utilities module.
 """
 from .database_utils import get_max_common_start_date, get_min_start_date
 

@@ -143,9 +143,9 @@ def render_tab_funds():
 
     # Show info messages BEFORE button
     if not isins or len(isins) == 0:
-        st.info("Add at least one fund to view comparison.")
+        st.info("Añade al menos un fondo para ver los datos")
     elif not st.session_state.should_show_comparison:
-        st.info("Press 'Compare funds' to view comparison.")
+        st.info("Presiona 'Comparar fondos' para ver la comparación.")
 
     # Compare button
     compare_button = st.button(

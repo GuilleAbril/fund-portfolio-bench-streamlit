@@ -1,5 +1,5 @@
 """
-Lógica de la pestaña de comparación de carteras.
+Logic for the portfolio comparison tab.
 """
 import sys
 from pathlib import Path
@@ -16,7 +16,7 @@ from streamlit_app.components.portfolio_components import render_portfolios_inpu
 
 
 def _initialize_session_state():
-    """Inicializa los estados de sesión necesarios para carteras."""
+    """Initializes session state keys required for the portfolios tab."""
     if 'last_compared_portfolios' not in st.session_state:
         st.session_state.last_compared_portfolios = []
     if 'last_portfolios_start_date' not in st.session_state:
@@ -35,12 +35,20 @@ def _initialize_session_state():
 
 def _should_execute_comparison(compare_button: bool, portfolios: list, start_date: str, end_date: str, date_mode: str) -> bool:
     """
-    Determina si se debe ejecutar una nueva comparación de carteras.
+    Determines whether a new portfolio comparison should be executed.
+
+    Args:
+        compare_button: Whether the compare button was pressed.
+        portfolios: Current list of portfolio dicts.
+        start_date: Current start date.
+        end_date: Current end date.
+        date_mode: Current date selection mode.
+
+    Returns:
+        True if comparison should be executed.
     """
-    # Representación simple para comparar cambios en estructura
     current_structure_repr = str([{p['name']: p['funds']} for p in portfolios])
     
-    # Recuperar estructura anterior si existe
     last_structure_repr = ""
     if st.session_state.last_compared_portfolios:
          last_structure_repr = str([{p['name']: p['funds']} for p in st.session_state.last_compared_portfolios])
@@ -52,9 +60,8 @@ def _should_execute_comparison(compare_button: bool, portfolios: list, start_dat
     if compare_button:
         return True
     
-    # Si ya se mostró la comparación anteriormente
+    # Re-execute if the comparison is already shown and dates changed without structure change
     elif st.session_state.should_show_portfolios_comparison:
-        # Si hubo cualquier cambio en la fecha (valor o modo) y NO hubo cambios en la estructura de carteras
         if (date_changed or date_mode_changed) and not structure_changed:
             return True
 
@@ -63,7 +70,13 @@ def _should_execute_comparison(compare_button: bool, portfolios: list, start_dat
 
 def _execute_comparison(portfolios: list, start_date: str, end_date: str, date_mode: str):
     """
-    Ejecuta la comparación de carteras y muestra los resultados.
+    Executes the portfolio comparison and displays results.
+
+    Args:
+        portfolios: List of portfolio dicts to compare.
+        start_date: Start date for comparison.
+        end_date: End date for comparison.
+        date_mode: Selected date mode.
     """
     st.session_state.last_compared_portfolios = portfolios
     st.session_state.last_portfolios_start_date = start_date
@@ -72,7 +85,6 @@ def _execute_comparison(portfolios: list, start_date: str, end_date: str, date_m
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Obtener datos de carteras (ya tienen sus fechas de inicio calculadas)
     portfolios_info = get_portfolios_for_comparison(
         portfolios, 
         start_date,
@@ -84,15 +96,12 @@ def _execute_comparison(portfolios: list, start_date: str, end_date: str, date_m
         st.session_state.last_portfolios_fig = None
         st.session_state.last_portfolios_html_bytes = None
     else:
-        # Generar gráfico
         fig = plot_portfolios(portfolios_info, start_date)
         html_bytes = fig.to_html(include_plotlyjs='cdn')
 
-        # Guardar en session_state
         st.session_state.last_portfolios_fig = fig
         st.session_state.last_portfolios_html_bytes = html_bytes
 
-        # Mostrar gráfico y botón de descarga
         st.plotly_chart(fig, width='stretch')
         st.download_button(
             label="Descargar gráfico como HTML",
@@ -105,7 +114,10 @@ def _execute_comparison(portfolios: list, start_date: str, end_date: str, date_m
 
 def _show_cached_comparison(date_mode: str):
     """
-    Muestra la última gráfica guardada de carteras sin recalcular.
+    Displays the last saved portfolio chart without recalculating.
+
+    Args:
+        date_mode: Current date mode.
     """
     if st.session_state.last_portfolios_date_mode != date_mode:
         st.session_state.last_portfolios_date_mode = date_mode
@@ -123,21 +135,20 @@ def _show_cached_comparison(date_mode: str):
 
 
 def render_tab_portfolios():
-    """Renderiza la pestaña de comparación de carteras."""
+    """Renders the portfolio comparison tab."""
     st.markdown("<br>", unsafe_allow_html=True)
 
     _initialize_session_state()
 
-    # Renderizar inputs de carteras
+    # Render portfolio inputs
     portfolios = render_portfolios_inputs()
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Mensajes informativos y botón de comparar
     if not portfolios:
         st.info("Añade al menos una cartera con fondos y pesos (que sumen 100%) para continuar.")
     
-    # Botón de comparar (siempre visible)
+    # Compare button (always visible)
     compare_button = st.button(
         "Comparar carteras",
         key="portfolio_compare_btn",
@@ -147,28 +158,24 @@ def render_tab_portfolios():
     )
     
     if not portfolios and not st.session_state.should_show_portfolios_comparison:
-         pass # Ya mostramos el info arriba
+         pass
     elif portfolios and not st.session_state.should_show_portfolios_comparison and not compare_button:
          st.info("Pulsa 'Comparar carteras' para ver el análisis.")
 
 
-    # Lógica de visualización
+    # Comparison display logic
     if portfolios:
         portfolios_start_dates = [p["portfolio_start_date"] for p in portfolios]
         
-        # Renderizar selector de fecha (si ya estamos mostrando comparación o si se pulsa el botón)
         if st.session_state.should_show_portfolios_comparison or compare_button:
-            # Renderizamos el selector siempre para tener la fecha, aunque no mostremos la gráfica todavía si es la primera vez (antes del click)
-            # Pero el click ya pone should_show a True.
-            
-            # Si es la primera vez que se pulsa, activamos flag
             if compare_button:
                 st.session_state.should_show_portfolios_comparison = True
 
             start_date, end_date = render_portfolios_date_selector("portfolios", portfolios_start_dates, portfolios)
             current_date_mode = st.session_state.get("portfolios_date_selection", "Usar fecha de inicio común")
 
-            # Lógica para determinar si enviamos una fecha específica o None (histórico completo real por cartera)
+            # When "Histórico completo" is selected and start equals the min portfolio date,
+            # pass None to let each portfolio use its own start date
             comparison_start_date = start_date
             if current_date_mode == "Histórico completo" and portfolios_start_dates:
                 min_date_str = min(portfolios_start_dates)
