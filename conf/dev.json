@@ -1,0 +1,4 @@
+{
+    "data_dir_relative_path": "src/download_data/data",
+    "metadata_db_relative_path": "src/download_data/data/metadata_funds.db"
+}
