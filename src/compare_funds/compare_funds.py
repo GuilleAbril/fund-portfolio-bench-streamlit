@@ -1,6 +1,6 @@
 """
-Módulo para cargar y procesar datos de fondos para comparación.
-Gestiona la carga desde Parquet, alineamiento temporal y normalización.
+Module for loading and processing fund data for comparison.
+Handles loading from Parquet files, temporal alignment, and normalization.
 """
 
 import sqlite3
@@ -12,25 +12,26 @@ from typing import List, Dict, Optional
 
 
 # ─────────────────────────────────────────────
-# CONSTANTES
+# CONSTANTS
 # ─────────────────────────────────────────────
-PROJECT_ROOT = Path(__file__).parent.parent.parent  # Sube desde src/compare_funds/
-DATA_DIR = PROJECT_ROOT / "src" / "download_data" / "data"
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+DATA_DIR = PROJECT_ROOT / "data"
 METADATA_DB = DATA_DIR / "metadata_funds.db"
 
 # ─────────────────────────────────────────────
-# FUNCIONES DE METADATA (SQLite)
+# METADATA FUNCTIONS (SQLite)
 # ─────────────────────────────────────────────
 
 def get_funds_metadata(isins: List[str]) -> Dict[str, Dict[str, str]]:
     """
-    Obtiene metadata de fondos desde SQLite.
-    
+    Retrieves fund metadata from the SQLite database.
+
     Args:
-        isins: Lista de ISINs a consultar
-        
+        isins: List of ISINs to query.
+
     Returns:
-        Dict con {isin: {'start_date': '...', 'name': '...'}}
+        Dictionary mapping each ISIN to its metadata:
+        {isin: {'start_date': '...', 'name': '...'}}.
     """
     if not METADATA_DB.exists():
         return {}
@@ -50,38 +51,42 @@ def get_funds_metadata(isins: List[str]) -> Dict[str, Dict[str, str]]:
 
 
 def fund_exists(isin: str) -> bool:
-    """Comprueba si existe el archivo parquet del fondo"""
+    """Checks whether the parquet file for the given fund exists."""
     return (DATA_DIR / f"{isin}.parquet").exists()
 
 
 # ─────────────────────────────────────────────
-# CARGA DE DATOS (Parquet)
+# DATA LOADING (Parquet)
 # ─────────────────────────────────────────────
 
-def load_normalized_data_fund(isin: str, start_date: Optional[str] = None) -> Optional[pa.Table]:
+def load_normalized_data_fund(isin: str, start_date: Optional[str] = None, end_date: Optional[str] = None)\
+        -> Optional[pa.Table]:
     """
-    Carga datos RAW de un fondo (sin normalizar).
-    
+    Loads and normalizes fund data to base 100.
+
     Args:
-        isin: ISIN del fondo
-        start_date: Fecha desde la que filtrar (opcional)
-        
+        isin: Fund ISIN identifier.
+        start_date: Optional start date filter (inclusive).
+        end_date: End date filter (inclusive).
+
     Returns:
-        fund_data: pa.Table[date, total_return]
+        PyArrow Table with columns [date, total_return] normalized to base 100,
+        or None if the file is missing or data is empty.
     """
     filepath = DATA_DIR / f"{isin}.parquet"
     if not filepath.exists():
         return None
 
     try:
-        # Leer parquet
         fund_data = pq.read_table(filepath)
 
-        # Filtrar por fecha si se proporciona
+        # Apply start date filter if provided
         if start_date:
-            mask = pc.greater_equal(fund_data['date'], start_date)
-            fund_data = fund_data.filter(mask)
+            mask_greater = pc.greater_equal(fund_data['date'], start_date)
+            fund_data = fund_data.filter(mask_greater)
 
+        mask_less = pc.less_equal(fund_data['date'], end_date)
+        fund_data = fund_data.filter(mask_less)
         base_value = fund_data["total_return"][0]
         division = pc.divide(fund_data["total_return"], base_value)
         normalized_column = pc.multiply(division, pa.scalar(100.0))
@@ -94,16 +99,16 @@ def load_normalized_data_fund(isin: str, start_date: Optional[str] = None) -> Op
         return fund_data
 
     except Exception as e:
-        print(f"Error cargando {isin}: {e}")
+        print(f"Error loading {isin}: {e}")
         return None
 
 
 # ─────────────────────────────────────────────
-# NORMALIZACIÓN Y ALINEAMIENTO
+# NORMALIZATION AND ALIGNMENT
 # ─────────────────────────────────────────────
 
 def normalize_to_base_100(values: List[float]) -> List[float]:
-    """Normaliza lista de valores a base 100 desde el primer elemento"""
+    """Normalizes a list of values to base 100 from the first element."""
     if not values or values[0] == 0:
         return values
     first = values[0]
@@ -111,43 +116,46 @@ def normalize_to_base_100(values: List[float]) -> List[float]:
 
 
 # ─────────────────────────────────────────────
-# COMPARACIÓN DE FONDOS
+# FUND COMPARISON
 # ─────────────────────────────────────────────
 
 def get_funds_for_comparison(
         isins: List[str],
-        start_date: Optional[str] = None
-) -> List[Dict]: #[str, str, pa.Table]
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None
+) -> List[Dict]:
     """
-    start_date: Optional[str] = None,
-    use_common_date: bool = True
-    Prepara fondos para comparación.
+    Prepares fund data for comparison, including CAGR calculation.
 
     Args:
-        isins: Lista de ISINs
-        start_date: Fecha desde la que cargar datos (None = histórico completo)
-        
+        isins: List of fund ISINs.
+        start_date: Start date filter (None = full history per fund).
+        end_date: End date filter.
+
     Returns:
-        List[Dict]
-        {'isin': str, 'name': str, 'fund_data': pa.Table[date, total_return]}
+        List of dicts with keys:
+        {'isin': str, 'name': str, 'fund_data': pa.Table, 'cagr': float}.
     """
-    # Cargar datos raw
     funds_info = []
     for isin in isins:
-        # Obtener nombre del metadata
         metadata = get_funds_metadata([isin])
         name = metadata.get(isin, {}).get('name', isin)
-        data = load_normalized_data_fund(isin, start_date)
+
+        data = load_normalized_data_fund(isin, start_date, end_date)
         dates_parsed = pc.cast(data["date"], pa.date32())
         min_date = pc.min(dates_parsed)
         max_date = pc.max(dates_parsed)
         v_inicial = data["total_return"][0].as_py()
         v_final = data["total_return"][-1].as_py()
         n_years = pc.days_between(min_date, max_date).as_py() / 365.25
-        cagr = (v_final / v_inicial) ** (1 / n_years) - 1
+        if n_years >= 1:
+            cagr_performance = (v_final / v_inicial) ** (1 / n_years) - 1
+        else:
+            cagr_performance = (v_final / v_inicial) - 1
+
         if data:
             funds_info.append(
-                {'isin': isin, 'name': name, 'fund_data': data, 'cagr': cagr}
+                {'isin': isin, 'name': name, 'fund_data': data, 'cagr': cagr_performance}
             )
 
     if not funds_info:
@@ -156,16 +164,23 @@ def get_funds_for_comparison(
     return funds_info
 
 # ─────────────────────────────────────────────
-# COMPARACIÓN DE CARTERAS
+# PORTFOLIO WEIGHTING
 # ─────────────────────────────────────────────
 def weight_portfolio_funds(funds_data_weights: list[dict]):
     """
-    :param funds_data_weights:
-    :return: pa.Table["date", "total_return"]
-    """
+    Calculates the weighted total return of a portfolio by combining
+    individual fund returns according to their assigned weights.
 
-    # funds_data_weights -> List of Dict con {isin: str, fund_data: pa.Table['dates', 'values'], weights: double}
-    # 1. Create a Master Calendar: Combine all unique dates from all tables
+    Args:
+        funds_data_weights: List of dicts, each containing:
+            - 'fund_data': pa.Table with columns [date, total_return]
+            - 'weight': float (decimal, e.g. 0.5 for 50%)
+
+    Returns:
+        pa.Table with columns [date, total_return] representing the
+        weighted portfolio performance.
+    """
+    # 1. Build a master calendar from all unique dates across funds
     all_dates_combined = pa.concat_tables([f_w.get("fund_data").select(["date"]) for f_w in funds_data_weights])
     master_calendar = pa.Table.from_arrays(
         [pc.unique(all_dates_combined["date"])],
@@ -174,37 +189,31 @@ def weight_portfolio_funds(funds_data_weights: list[dict]):
 
     weighted_arrays = []
 
-    # 2. Process each fund
+    # 2. Align each fund to the master calendar and apply its weight
     for item in funds_data_weights:
         table = item['fund_data']
         weight = item['weight']
 
-        # Align the fund data to the master calendar
-        # Dates without values will result in 'null'
         aligned_table = master_calendar.join(table, keys="date", join_type="left outer")
         aligned_table = aligned_table.sort_by([("date", "ascending")])
 
-        # Fill missing values by carrying forward the last known 'total_return'
+        # Forward-fill missing values for dates where a fund has no data
         filled_values = pc.fill_null_forward(aligned_table["total_return"])
 
-        # Multiply the filled array by the fund's specific weight
         weighted_array = pc.multiply(filled_values, weight)
         weighted_arrays.append(weighted_array)
 
-    # 3. Aggregate results
-    # Initialize the accumulator with the first weighted array
+    # 3. Sum all weighted arrays into a single total return series
     total_weighted_return = weighted_arrays[0]
 
-    # TODO mirar que hace aqui que los mete mal
     for i in range(1, len(weighted_arrays)):
-        # We use fill_null(0) during addition to handle funds with different start dates
-        # ensuring they don't turn the whole sum into 'null'
+        # Use fill_null(0) to handle funds with different start dates
         total_weighted_return = pc.add(
             pc.fill_null(total_weighted_return, 0),
             pc.fill_null(weighted_arrays[i], 0)
         )
 
-    # 4. Final Table Construction
+    # 4. Build final table
     final_table = pa.Table.from_arrays(
         [master_calendar["date"], total_weighted_return],
         names=["date", "total_return"]
@@ -214,42 +223,43 @@ def weight_portfolio_funds(funds_data_weights: list[dict]):
 
 
 # ─────────────────────────────────────────────
-# COMPARACIÓN DE CARTERAS
+# PORTFOLIO COMPARISON
 # ─────────────────────────────────────────────
 def get_portfolio_for_comparison(
         portfolio: Dict,
-        # portfolio -> {'name': f'Cartera {p_idx + 1}','funds': funds, 'portfolio_start_date': portfolio_start_date,'color': PORTFOLIO_COLORS[p_idx]}
-        # funds: list({'isin': isin, 'weight': weight})
-        start_date_portfolios: Optional[str] = None
+        start_date_portfolios: Optional[str] = None, end_date: Optional[str] = None
 ) -> Optional[Dict]:
     """
-    Prepara una cartera para comparación.
+    Prepares a single portfolio for comparison.
 
     Args:
-        portfolio: Dict con 'name', 'funds': [{'isin': '...', 'weight': 50.0}, ...]
-        start_date_portfolios: Fecha desde la que cargar datos
+        portfolio: Dict with keys 'name', 'funds' (list of {'isin', 'weight'}),
+                   and 'portfolio_start_date'.
+        start_date_portfolios: Override start date (None = use portfolio's own start date).
+        end_date: End date filter.
+
     Returns:
-        'name': portfolio['name'],
-        'portfolio_total_return': pa.Table["date", "total_return"]
+        Dict with keys {'name', 'portfolio_total_return': pa.Table, 'cagr': float},
+        or None if weights don't sum to 100% or no data is available.
     """
-    # Validar que pesos sumen 100%
+    # Validate that weights sum to 100%
     total_weight = sum(f['weight'] for f in portfolio['funds'])
     if abs(total_weight - 100.0) > 0.01:
         return None
 
-    # fecha a partir de la cual generar los datos del portfolio
+    # Determine the effective start date
     if start_date_portfolios:
         start_date = start_date_portfolios
     else:
         start_date = portfolio['portfolio_start_date']
 
-    # Cargar fondos de la cartera
+    # Load and normalize each fund in the portfolio
     funds_info = []
     for fund in portfolio['funds']:
-        data = load_normalized_data_fund(fund['isin'], start_date)
+        data = load_normalized_data_fund(fund['isin'], start_date, end_date)
         if data:
             funds_info.append({
-                'weight': fund['weight'] / 100.0,  # Convertir a decimal
+                'weight': fund['weight'] / 100.0,
                 'fund_data': data
             })
 
@@ -258,43 +268,43 @@ def get_portfolio_for_comparison(
 
     portfolio_weighted_total_return = weight_portfolio_funds(funds_info)
 
+    # Calculate CAGR
     dates_parsed = pc.cast(portfolio_weighted_total_return["date"], pa.date32())
     min_date = pc.min(dates_parsed)
     max_date = pc.max(dates_parsed)
     v_inicial = portfolio_weighted_total_return["total_return"][0].as_py()
     v_final = portfolio_weighted_total_return["total_return"][-1].as_py()
     n_years = pc.days_between(min_date, max_date).as_py() / 365.25
-    cagr = (v_final / v_inicial) ** (1 / n_years) - 1
+    if n_years >= 1:
+        cagr_performance = (v_final / v_inicial) ** (1 / n_years) - 1
+    else:
+        cagr_performance = (v_final / v_inicial) - 1
 
     return {
         'name': portfolio['name'],
         'portfolio_total_return': portfolio_weighted_total_return,
-        'cagr': cagr
+        'cagr': cagr_performance
     }
 
 
 def get_portfolios_for_comparison(
-        portfolios: List[Dict], # lista de dicts con isins, pesos y fecha de comienzo de cada portfolio (el min de su fondo más reciente)
-        start_date_portfolios: Optional[str] = None
+        portfolios: List[Dict],
+        start_date_portfolios: Optional[str] = None, end_date: Optional[str] = None
 ) -> List[Dict[str, pa.Table]]:
     """
-    Prepara múltiples carteras para comparación.
+    Prepares multiple portfolios for comparison.
 
     Args:
-        portfolios: Lista de carteras
-        start_date_portfolios: Fecha desde la que cargar datos
+        portfolios: List of portfolio dicts (see get_portfolio_for_comparison).
+        start_date_portfolios: Override start date for all portfolios (None = per-portfolio).
+        end_date: End date filter.
 
     Returns:
-        List [
-        'name': portfolio['name'],
-        'portfolio_total_return': pa.Table["date", "total_return"]
-        ]
+        List of dicts with keys {'name', 'portfolio_total_return': pa.Table, 'cagr': float}.
     """
     result = []
     for portfolio in portfolios:
-        # portfolio -> {'name': f'Cartera {p_idx + 1}','funds': funds, 'portfolio_start_date': portfolio_start_date,'color': PORTFOLIO_COLORS[p_idx]}
-        # funds: list({'isin': isin, 'weight': weight})
-        portfolio_info = get_portfolio_for_comparison(portfolio, start_date_portfolios) #{name: str, portfolio_total_return: Table[date, total_return]}
+        portfolio_info = get_portfolio_for_comparison(portfolio, start_date_portfolios, end_date)
         if portfolio_info:
             result.append(portfolio_info)
 

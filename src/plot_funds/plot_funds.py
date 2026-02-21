@@ -1,15 +1,15 @@
 """
-Módulo para generar gráficas de comparación de fondos y carteras con Plotly.
+Module for generating fund and portfolio comparison charts with Plotly.
 """
 
 import plotly.graph_objects as go
 import pyarrow as pa
-import  pyarrow.compute as pc
+import pyarrow.compute as pc
 from typing import List, Dict, Optional
 
 
 # ─────────────────────────────────────────────
-# CONSTANTES DE ESTILO
+# STYLE CONSTANTS
 # ─────────────────────────────────────────────
 FUND_COLORS = [
     "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
@@ -20,17 +20,17 @@ PORTFOLIO_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"]
 
 
 # ─────────────────────────────────────────────
-# APLICAR LAYOUT COMÚN
+# COMMON CHART LAYOUT
 # ─────────────────────────────────────────────
 
 def _apply_chart_layout(fig: go.Figure, title: str):
-    """Aplica estilo común a las gráficas"""
+    """Applies the common dark-theme layout to a Plotly figure."""
     fig.update_layout(
         title=dict(
             text=title,
             font=dict(color="#e2e8f0", size=22),
-            y=0.98,  # Ajustar posición vertical del título
-            x=0.5,   # Centrar el título
+            y=0.98,
+            x=0.5,
             xanchor='center',
             yanchor='top'
         ),
@@ -70,7 +70,7 @@ def _apply_chart_layout(fig: go.Figure, title: str):
 
 
 # ─────────────────────────────────────────────
-# GRÁFICA DE FONDOS
+# FUND CHART
 # ─────────────────────────────────────────────
 
 def plot_funds(
@@ -78,14 +78,15 @@ def plot_funds(
         start_date: Optional[str] = None
 ) -> go.Figure:
     """
-    Crea gráfica de comparación de fondos.
+    Creates a comparison chart for multiple funds.
 
     Args:
-        funds_info: Lista de fondos con 'name': str, 'dates': str, 'funds_data': pa.Table
-        start_date: Fecha de inicio (para el título)
+        funds_info: List of fund dicts with keys 'name', 'fund_data' (pa.Table),
+                    and 'cagr' (float).
+        start_date: Start date string used for the chart title.
 
     Returns:
-        Figura de Plotly
+        Plotly Figure object.
     """
     fig = go.Figure()
 
@@ -99,17 +100,17 @@ def plot_funds(
             x=fund_data['date'].to_pylist(),
             y=profitability.to_pylist(),
             mode='lines',
-            name=label + f" (CAGR: {cagr_str})",
+            name=label + f" (CAGR / Rentabilidad periodo: {cagr_str})",
             line=dict(
                 width=2,
                 color=FUND_COLORS[idx % len(FUND_COLORS)]
             ),
             hovertemplate=f"<b>{label}</b><br>"
                           f"Rentabilidad: %{{y:.2f}}%<br>"
-                          f"Rentabilidad anualizada total: <b>{cagr_str}</b><extra></extra>"
+                          f"Rentabilidad anualizada total / Rentabilidad periodo (<1y): <b>{cagr_str}</b><extra></extra>"
         ))
 
-    # Título dinámico (más corto y sin "Base 100")
+    # Dynamic title
     if start_date:
         title = f"Comparativa desde {start_date}"
     else:
@@ -117,7 +118,7 @@ def plot_funds(
 
     _apply_chart_layout(fig, title)
 
-    # Configurar hover mode con spike para mostrar la fecha abajo
+    # Unified hover with vertical spike line
     fig.update_layout(
         hovermode="x unified",
         hoverlabel=dict(
@@ -127,7 +128,6 @@ def plot_funds(
         )
     )
 
-    # Añadir spike line vertical y configuración para mostrar fecha en eje X
     fig.update_xaxes(
         showspikes=True,
         spikemode="across",
@@ -148,47 +148,46 @@ def plot_funds(
 
 
 # ─────────────────────────────────────────────
-# GRÁFICA DE CARTERAS
+# PORTFOLIO CHART
 # ─────────────────────────────────────────────
 
 def plot_portfolios(
-        portfolios_info:  list[dict[str, pa.Table]],
+        portfolios_info: list[dict[str, pa.Table]],
         start_date: Optional[str] = None
 ) -> go.Figure:
     """
-    Crea gráfica de comparación de carteras.
+    Creates a comparison chart for multiple portfolios.
 
     Args:
-        portfolios_info: Lista de carteras con 'name', 'dates', 'values', 'common_start'
-        start_date: Fecha de inicio (para el título)
+        portfolios_info: List of portfolio dicts with keys 'name',
+                         'portfolio_total_return' (pa.Table), and 'cagr' (float).
+        start_date: Start date string used for the chart title.
 
     Returns:
-        Figura de Plotly
+        Plotly Figure object.
     """
     fig = go.Figure()
 
     for idx, portfolio in enumerate(portfolios_info):
         cagr_str = f"{portfolio.get('cagr'):.2%}"
-        print(portfolio['name'])
-        print(portfolio.get("portfolio_total_return"))
+
         profitability = pc.subtract(portfolio.get("portfolio_total_return")['total_return'], 100)
-        print("last values")
-        print(profitability.to_pylist()[-100:])
+
         fig.add_trace(go.Scatter(
             x=portfolio.get("portfolio_total_return")['date'].to_pylist(),
             y=profitability.to_pylist(),
             mode='lines',
-            name=portfolio['name']  + f" (CAGR: {cagr_str})",
+            name=portfolio['name'] + f" (CAGR / Rentabilidad periodo: {cagr_str})",
             line=dict(
                 width=2.5,
                 color=PORTFOLIO_COLORS[idx % len(PORTFOLIO_COLORS)]
             ),
             hovertemplate=f"<b>{portfolio['name']}</b><br>"
                           f"Rentabilidad: %{{y:.2f}}%<br>"
-                          f"Rentabilidad anualizada total: <b>{cagr_str}</b><extra></extra>"
+                          f"Rentabilidad anualizada total / Rentabilidad periodo (<1y): <b>{cagr_str}</b><extra></extra>"
         ))
 
-    # Título dinámico
+    # Dynamic title
     if start_date:
         title = f"Comparativa de Carteras desde {start_date}"
     else:
@@ -196,7 +195,7 @@ def plot_portfolios(
 
     _apply_chart_layout(fig, title)
 
-    # Configurar hover mode con spike para mostrar la fecha abajo
+    # Unified hover with vertical spike line
     fig.update_layout(
         hovermode="x unified",
         hoverlabel=dict(
@@ -206,7 +205,6 @@ def plot_portfolios(
         )
     )
 
-    # Añadir spike line vertical y configuración para mostrar fecha en eje X
     fig.update_xaxes(
         showspikes=True,
         spikemode="across",
