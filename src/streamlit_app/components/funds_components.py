@@ -8,12 +8,12 @@ src_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(src_dir))
 
 import streamlit as st
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Optional
 
-from compare_funds.compare_funds import get_funds_metadata, fund_exists
+from compare_funds.compare_funds import get_funds_metadata
 from streamlit_app.config import MAX_FUNDS
-from streamlit_app.utils.database_utils import get_max_common_start_date, get_min_start_date, search_funds_by_name
+from streamlit_app.utils.database_utils import get_max_common_start_date, get_min_start_date
 from streamlit_app.utils.common import calculate_date_from_period, get_default_end_date
 
 
@@ -36,45 +36,70 @@ def render_funds_inputs(prefix: str, num_funds: int = MAX_FUNDS) -> List[str]:
     options_list = list(fund_options.keys())
     
     cols = st.columns(2)
+    
+    # Column configuration for internal layout (clear button + selectbox)
+    SEARCH_COLS_RATIO = [1, 20]
 
     for i in range(num_funds):
         col = cols[i % 2]
         session_key = f"{prefix}_selected_isin_{i}"
+        search_key = f"{prefix}_search_{i}"
         
-        # Get current ISIN if already selected
-        current_isin = st.session_state.get(session_key, "")
+        # Internal layout for each fund slot
+        inner_cols = col.columns(SEARCH_COLS_RATIO)
         
-        # Find corresponding label for the selectbox value
-        index = None
-        if current_isin:
-            for label, isin in fund_options.items():
-                if isin == current_isin:
-                    index = options_list.index(label)
-                    break
+        # Clear button (X)
+        with inner_cols[0]:
+            # Only show if a fund is selected
+            current_isin = st.session_state.get(session_key, "")
+            if current_isin:
+                st.markdown('<div class="clear-fund-btn">', unsafe_allow_html=True)
+                if st.button("✕", key=f"{prefix}_clear_{i}", help="Quitar fondo"):
+                    st.session_state[session_key] = ""
+                    # We need to handle the internal selectbox key if it exists
+                    if search_key in st.session_state:
+                        st.session_state[search_key] = None
+                    st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                # Use empty space to maintain layout alignment
+                st.write("")
 
-        selected_label = col.selectbox(
-            f"Fondo {i + 1}",
-            options=options_list,
-            index=index,
-            placeholder="Escribe el nombre o ISIN del fondo",
-            key=f"{prefix}_search_{i}",
-        )
-
-        if selected_label:
-            selected_isin = fund_options[selected_label]
-            st.session_state[session_key] = selected_isin
-            isins.append(selected_isin)
+        with inner_cols[1]:
+            # Get current ISIN if already selected
+            current_isin = st.session_state.get(session_key, "")
             
-            # Extract name for confirmation display
-            metadata = get_funds_metadata([selected_isin])
-            name = metadata.get(selected_isin, {}).get('name', selected_isin)
-            col.markdown(
-                f'<div class="status-ok">✓ {name}</div>',
-                unsafe_allow_html=True
+            # Find corresponding label for the selectbox value
+            index = None
+            if current_isin:
+                for label, isin in fund_options.items():
+                    if isin == current_isin:
+                        index = options_list.index(label)
+                        break
+
+            selected_label = st.selectbox(
+                f"Fondo {i + 1}",
+                options=options_list,
+                index=index,
+                placeholder="ISIN o nombre del fondo",
+                key=search_key,
             )
-        else:
-            # If nothing selected, clear the state for this index
-            st.session_state[session_key] = ""
+
+            if selected_label:
+                selected_isin = fund_options[selected_label]
+                st.session_state[session_key] = selected_isin
+                isins.append(selected_isin)
+                
+                # Extract name for confirmation display
+                metadata = get_funds_metadata([selected_isin])
+                name = metadata.get(selected_isin, {}).get('name', selected_isin)
+                st.markdown(
+                    f'<div class="status-ok">✓ {name}</div>',
+                    unsafe_allow_html=True
+                )
+            else:
+                # If nothing selected, clear the state for this index
+                st.session_state[session_key] = ""
 
     return isins
 
@@ -136,7 +161,7 @@ def render_funds_date_selector(prefix: str, isins: List[str]) -> Optional[tuple[
         st.session_state[session_key_counter] = 0
 
     # Single row with all buttons
-    st.markdown("**Start date for comparison:**")
+    st.markdown("**Periodo de comparación:**")
 
     cols = st.columns([2, 2.5, 0.8, 0.8, 0.8, 0.8, 4])
 

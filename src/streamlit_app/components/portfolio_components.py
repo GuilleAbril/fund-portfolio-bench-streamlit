@@ -8,12 +8,12 @@ src_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(src_dir))
 
 import streamlit as st
-from datetime import datetime, timedelta, date
+from datetime import datetime
 from typing import List, Dict, Optional
 
-from compare_funds.compare_funds import get_funds_metadata, fund_exists
+from compare_funds.compare_funds import get_funds_metadata
 from streamlit_app.config import MAX_FUNDS, MAX_PORTFOLIOS, PORTFOLIO_COLORS
-from streamlit_app.utils.database_utils import get_max_common_start_date, search_funds_by_name
+from streamlit_app.utils.database_utils import get_max_common_start_date
 from streamlit_app.utils.common import calculate_date_from_period, get_default_end_date
 
 
@@ -66,8 +66,27 @@ def render_portfolios_inputs() -> List[Dict]:
         options_list = list(fund_options.keys())
 
         for f_idx in range(num_funds):
-            input_cols = col.columns([2, 1])
             session_key = f"portfolio_{p_idx}_selected_isin_{f_idx}"
+            search_key = f"port_{p_idx}_search_{f_idx}"
+            weight_key = f"portfolio_{p_idx}_weight_{f_idx}"
+            
+            # Internal layout with clear button
+            input_cols = col.columns([0.4, 2, 1])
+            
+            with input_cols[0]:
+                current_isin = st.session_state.get(session_key, "")
+                if current_isin:
+                    st.markdown('<div class="clear-fund-btn">', unsafe_allow_html=True)
+                    if st.button("✕", key=f"port_{p_idx}_clear_{f_idx}", help="Quitar fondo"):
+                        st.session_state[session_key] = ""
+                        if search_key in st.session_state:
+                            st.session_state[search_key] = None
+                        if weight_key in st.session_state:
+                            st.session_state[weight_key] = 0.0
+                        st.rerun()
+                    st.markdown('</div>', unsafe_allow_html=True)
+                else:
+                    st.write("")
 
             # Get current ISIN if already selected
             current_isin = st.session_state.get(session_key, "")
@@ -80,22 +99,22 @@ def render_portfolios_inputs() -> List[Dict]:
                         index = options_list.index(label)
                         break
 
-            selected_label = input_cols[0].selectbox(
+            selected_label = input_cols[1].selectbox(
                 "Fondo",
                 options=options_list,
                 index=index,
-                placeholder="Busca fondo...",
-                key=f"port_{p_idx}_search_{f_idx}",
+                placeholder="ISIN o nombre del fondo",
+                key=search_key,
                 label_visibility="visible" if f_idx == 0 else "hidden"
             )
 
-            weight = input_cols[1].number_input(
+            weight = input_cols[2].number_input(
                 "Weight %",
                 min_value=0.0,
                 max_value=100.0,
                 step=1.0,
-                value=0.0,
-                key=f"portfolio_{p_idx}_weight_{f_idx}",
+                value=st.session_state.get(weight_key, 0.0),
+                key=weight_key,
                 label_visibility="visible" if f_idx == 0 else "hidden"
             )
 
@@ -232,7 +251,7 @@ def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optiona
     if session_key_counter not in st.session_state:
         st.session_state[session_key_counter] = 0
 
-    st.markdown("**Start date for comparison:**")
+    st.markdown("**Periodo de comparación:**")
 
     cols = st.columns([2, 2.5, 0.8, 0.8, 0.8, 0.8, 4])
 

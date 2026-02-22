@@ -162,6 +162,31 @@ def apply_custom_styles():
             font-size: 12px;
         }
 
+        /* Clear fund button styling */
+        .clear-fund-btn button {
+            background-color: #1a1d2e !important;
+            color: #7a85a8 !important;
+            border: 1px solid #2a2f4a !important;
+            border-radius: 6px !important;
+            width: 38px !important;
+            height: 38px !important;
+            min-height: 38px !important;
+            min-width: 38px !important;
+            padding: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            font-size: 16px !important;
+            line-height: 1 !important;
+            margin-top: 28px !important;
+            transition: all 0.2s !important;
+        }
+        .clear-fund-btn button:hover {
+            border-color: #3b82f6 !important;
+            color: #ef4444 !important;
+            background-color: #1a1d2e !important;
+        }
+
         #MainMenu { visibility: hidden; }
         footer { visibility: hidden; }
     </style>
