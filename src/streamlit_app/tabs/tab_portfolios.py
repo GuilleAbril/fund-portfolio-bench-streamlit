@@ -154,7 +154,7 @@ def render_tab_portfolios():
         key="portfolio_compare_btn",
         type="primary",
         disabled=not portfolios,
-        use_container_width=True
+        width='stretch'
     )
     
     if not portfolios and not st.session_state.should_show_portfolios_comparison:

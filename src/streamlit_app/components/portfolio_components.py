@@ -13,7 +13,7 @@ from typing import List, Dict, Optional
 
 from compare_funds.compare_funds import get_funds_metadata, fund_exists
 from streamlit_app.config import MAX_FUNDS, MAX_PORTFOLIOS, PORTFOLIO_COLORS
-from streamlit_app.utils.database_utils import get_max_common_start_date
+from streamlit_app.utils.database_utils import get_max_common_start_date, search_funds_by_name
 from streamlit_app.utils.common import calculate_date_from_period, get_default_end_date
 
 
@@ -61,16 +61,33 @@ def render_portfolios_inputs() -> List[Dict]:
         total_weight = 0.0
         portfolio_isins = []
 
+        from streamlit_app.utils.database_utils import get_fund_options
+        fund_options = get_fund_options()
+        options_list = list(fund_options.keys())
+
         for f_idx in range(num_funds):
             input_cols = col.columns([2, 1])
+            session_key = f"portfolio_{p_idx}_selected_isin_{f_idx}"
 
-            isin = input_cols[0].text_input(
-                "ISIN",
-                placeholder=f"ISIN fund {f_idx + 1}",
-                key=f"portfolio_{p_idx}_isin_{f_idx}",
-                max_chars=12,
+            # Get current ISIN if already selected
+            current_isin = st.session_state.get(session_key, "")
+            
+            # Find corresponding label for the selectbox value
+            index = None
+            if current_isin:
+                for label, isin in fund_options.items():
+                    if isin == current_isin:
+                        index = options_list.index(label)
+                        break
+
+            selected_label = input_cols[0].selectbox(
+                "Fondo",
+                options=options_list,
+                index=index,
+                placeholder="Busca fondo...",
+                key=f"port_{p_idx}_search_{f_idx}",
                 label_visibility="visible" if f_idx == 0 else "hidden"
-            ).strip().upper()
+            )
 
             weight = input_cols[1].number_input(
                 "Weight %",
@@ -82,22 +99,21 @@ def render_portfolios_inputs() -> List[Dict]:
                 label_visibility="visible" if f_idx == 0 else "hidden"
             )
 
-            if isin:
-                if fund_exists(isin):
-                    metadata = get_funds_metadata([isin])
-                    name = metadata.get(isin, {}).get('name', isin)
-                    col.markdown(
-                        f'<div class="status-ok">✓ {name}</div>',
-                        unsafe_allow_html=True
-                    )
-                    funds.append({'isin': isin, 'weight': weight, 'name': name})
-                    portfolio_isins.append(isin)
-                    total_weight += weight
-                else:
-                    col.markdown(
-                        f'<div class="status-error">✗ {isin}</div>',
-                        unsafe_allow_html=True
-                    )
+            if selected_label:
+                selected_isin = fund_options[selected_label]
+                st.session_state[session_key] = selected_isin
+                
+                metadata = get_funds_metadata([selected_isin])
+                name = metadata.get(selected_isin, {}).get('name', selected_isin)
+                col.markdown(
+                    f'<div class="status-ok">✓ {name}</div>',
+                    unsafe_allow_html=True
+                )
+                funds.append({'isin': selected_isin, 'weight': weight, 'name': name})
+                portfolio_isins.append(selected_isin)
+                total_weight += weight
+            else:
+                st.session_state[session_key] = ""
 
         # Total weight indicator
         _render_weight_indicator(col, total_weight)
@@ -221,7 +237,7 @@ def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optiona
     cols = st.columns([2, 2.5, 0.8, 0.8, 0.8, 0.8, 4])
 
     # "Full History" button: allows viewing from the start of the oldest portfolio
-    if cols[0].button("Histórico completo", key=f"{prefix}_btn_historico", use_container_width=True):
+    if cols[0].button("Histórico completo", key=f"{prefix}_btn_historico", width='stretch'):
         st.session_state[session_key_mode] = "Histórico completo"
         min_date = (datetime.strptime(min_start_date, '%Y-%m-%d').date()
                     if min_start_date else datetime(1990, 1, 1).date())
@@ -230,7 +246,7 @@ def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optiona
         st.rerun()
 
     # "Common Start Date" button
-    if cols[1].button("Usar fecha de inicio común", key=f"{prefix}_btn_comun", use_container_width=True):
+    if cols[1].button("Usar fecha de inicio común", key=f"{prefix}_btn_comun", width='stretch'):
         st.session_state[session_key_mode] = "Usar fecha de inicio común"
         common_date = datetime.strptime(common_start_date_str, '%Y-%m-%d').date() if common_start_date_str else default_end_date
         st.session_state[session_key_range] = (common_date, default_end_date)
@@ -240,7 +256,7 @@ def render_portfolios_date_selector(prefix: str, portfolios_start_dates: Optiona
     # Period buttons
     period_buttons = ["YTD", "1A", "3A", "5A"]
     for i, period in enumerate(period_buttons):
-        if cols[i + 2].button(period, key=f"{prefix}_btn_{period}", use_container_width=True):
+        if cols[i + 2].button(period, key=f"{prefix}_btn_{period}", width='stretch'):
             st.session_state[session_key_mode] = period
             calculated_start = calculate_date_from_period(period, min_start_date)
             st.session_state[session_key_range] = (
