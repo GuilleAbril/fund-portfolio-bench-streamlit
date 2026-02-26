@@ -125,7 +125,7 @@ def render_portfolios_inputs() -> List[Dict]:
                 metadata = get_funds_metadata([selected_isin])
                 name = metadata.get(selected_isin, {}).get('name', selected_isin)
                 col.markdown(
-                    f'<div class="status-ok">✓ {name}</div>',
+                    f'<div class="status-ok">✓ {name} - {selected_isin}</div>',
                     unsafe_allow_html=True
                 )
                 funds.append({'isin': selected_isin, 'weight': weight, 'name': name})
@@ -139,7 +139,7 @@ def render_portfolios_inputs() -> List[Dict]:
 
         # Button to add fund
         if num_funds < MAX_FUNDS:
-            if col.button("+ Add fund", key=f"add_fund_{p_idx}"):
+            if col.button("+ Añadir fondo", key=f"add_fund_{p_idx}"):
                 st.session_state.portfolio_fund_counts[p_idx] += 1
                 st.rerun()
 

@@ -46,7 +46,7 @@ def get_fund_options() -> Dict[str, str]:
     try:
         with sqlite3.connect(metadata_path) as conn:
             cursor = conn.execute("SELECT isin, name FROM funds ORDER BY name")
-            return {f"{row[1]} ({row[0]})": row[0] for row in cursor.fetchall()}
+            return {f"{row[1]} - {row[0]}": row[0] for row in cursor.fetchall()}
     except Exception:
         return {}
 

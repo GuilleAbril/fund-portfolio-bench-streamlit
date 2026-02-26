@@ -151,7 +151,7 @@ def apply_custom_styles():
             color: #22c55e;
             border-radius: 6px;
             padding: 6px 12px;
-            font-size: 12px;
+            font-size: 14px;
         }
         .status-error {
             background: rgba(239, 68, 68, 0.1);

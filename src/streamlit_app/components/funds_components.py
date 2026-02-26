@@ -94,7 +94,7 @@ def render_funds_inputs(prefix: str, num_funds: int = MAX_FUNDS) -> List[str]:
                 metadata = get_funds_metadata([selected_isin])
                 name = metadata.get(selected_isin, {}).get('name', selected_isin)
                 st.markdown(
-                    f'<div class="status-ok">✓ {name}</div>',
+                    f'<div class="status-ok">✓ {name} - {selected_isin}</div>',
                     unsafe_allow_html=True
                 )
             else:
