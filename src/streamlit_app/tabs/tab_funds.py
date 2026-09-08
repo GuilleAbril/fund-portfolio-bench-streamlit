@@ -143,7 +143,7 @@ def render_tab_funds():
 
     # Show info messages BEFORE button
     if not isins or len(isins) == 0:
-        st.info("Añade al menos un fondo para ver los datos")
+        st.info("Añade al menos un fondo para ver la comparación")
     elif not st.session_state.should_show_comparison:
         st.info("Presiona 'Comparar fondos' para ver la comparación.")
 
@@ -153,7 +153,7 @@ def render_tab_funds():
         key="fund_compare_btn",
         type="primary",
         disabled=not isins or len(isins) == 0,
-        use_container_width=True
+        width='stretch'
     )
 
     # If there are ISINs and a comparison has been made, show date selector

@@ -8,10 +8,10 @@ src_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(src_dir))
 
 import streamlit as st
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Optional
 
-from compare_funds.compare_funds import get_funds_metadata, fund_exists
+from compare_funds.compare_funds import get_funds_metadata
 from streamlit_app.config import MAX_FUNDS
 from streamlit_app.utils.database_utils import get_max_common_start_date, get_min_start_date
 from streamlit_app.utils.common import calculate_date_from_period, get_default_end_date
@@ -19,7 +19,8 @@ from streamlit_app.utils.common import calculate_date_from_period, get_default_e
 
 def render_funds_inputs(prefix: str, num_funds: int = MAX_FUNDS) -> List[str]:
     """
-    Renders ISIN input boxes and returns a list of valid ISINs.
+    Renders fund selection boxes using a searchable selectbox (dropdown).
+    Users can type ISIN or name to filter the list.
 
     Args:
         prefix: Prefix for component keys.
@@ -28,33 +29,77 @@ def render_funds_inputs(prefix: str, num_funds: int = MAX_FUNDS) -> List[str]:
     Returns:
         List of valid ISINs.
     """
+    from streamlit_app.utils.database_utils import get_fund_options
+    
     isins = []
+    fund_options = get_fund_options() # Mapping of "Name (ISIN)" -> ISIN
+    options_list = list(fund_options.keys())
+    
     cols = st.columns(2)
+    
+    # Column configuration for internal layout (clear button + selectbox)
+    SEARCH_COLS_RATIO = [1, 20]
 
     for i in range(num_funds):
         col = cols[i % 2]
-        isin = col.text_input(
-            f"Fondo {i + 1}",
-            placeholder="ISIN",
-            key=f"{prefix}_isin_{i}",
-            max_chars=12
-        ).strip().upper()
-
-        if isin:
-            if fund_exists(isin):
-                # Get fund name
-                metadata = get_funds_metadata([isin])
-                name = metadata.get(isin, {}).get('name', isin)
-                col.markdown(
-                    f'<div class="status-ok">✓ {name}</div>',
-                    unsafe_allow_html=True
-                )
-                isins.append(isin)
+        session_key = f"{prefix}_selected_isin_{i}"
+        search_key = f"{prefix}_search_{i}"
+        
+        # Internal layout for each fund slot
+        inner_cols = col.columns(SEARCH_COLS_RATIO)
+        
+        # Clear button (X)
+        with inner_cols[0]:
+            # Only show if a fund is selected
+            current_isin = st.session_state.get(session_key, "")
+            if current_isin:
+                st.markdown('<div class="clear-fund-btn">', unsafe_allow_html=True)
+                if st.button("✕", key=f"{prefix}_clear_{i}", help="Quitar fondo"):
+                    st.session_state[session_key] = ""
+                    # We need to handle the internal selectbox key if it exists
+                    if search_key in st.session_state:
+                        st.session_state[search_key] = None
+                    st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
             else:
-                col.markdown(
-                    f'<div class="status-error">✗ {isin} not found</div>',
+                # Use empty space to maintain layout alignment
+                st.write("")
+
+        with inner_cols[1]:
+            # Get current ISIN if already selected
+            current_isin = st.session_state.get(session_key, "")
+            
+            # Find corresponding label for the selectbox value
+            index = None
+            if current_isin:
+                for label, isin in fund_options.items():
+                    if isin == current_isin:
+                        index = options_list.index(label)
+                        break
+
+            selected_label = st.selectbox(
+                f"Fondo {i + 1}",
+                options=options_list,
+                index=index,
+                placeholder="ISIN o nombre del fondo",
+                key=search_key,
+            )
+
+            if selected_label:
+                selected_isin = fund_options[selected_label]
+                st.session_state[session_key] = selected_isin
+                isins.append(selected_isin)
+                
+                # Extract name for confirmation display
+                metadata = get_funds_metadata([selected_isin])
+                name = metadata.get(selected_isin, {}).get('name', selected_isin)
+                st.markdown(
+                    f'<div class="status-ok">✓ {name} - {selected_isin}</div>',
                     unsafe_allow_html=True
                 )
+            else:
+                # If nothing selected, clear the state for this index
+                st.session_state[session_key] = ""
 
     return isins
 
@@ -116,12 +161,12 @@ def render_funds_date_selector(prefix: str, isins: List[str]) -> Optional[tuple[
         st.session_state[session_key_counter] = 0
 
     # Single row with all buttons
-    st.markdown("**Start date for comparison:**")
+    st.markdown("**Periodo de comparación:**")
 
     cols = st.columns([2, 2.5, 0.8, 0.8, 0.8, 0.8, 4])
 
     # "Full History" button
-    if cols[0].button("Histórico completo", key=f"{prefix}_btn_historico", use_container_width=True):
+    if cols[0].button("Histórico completo", key=f"{prefix}_btn_historico", width='stretch'):
         st.session_state[session_key_mode] = "Histórico completo"
         # Set range from minimum date to today
         min_date = (datetime.strptime(min_start_date, '%Y-%m-%d').date()
@@ -131,7 +176,7 @@ def render_funds_date_selector(prefix: str, isins: List[str]) -> Optional[tuple[
         st.rerun()
 
     # "Common Start Date" button
-    if cols[1].button("Usar fecha de inicio común", key=f"{prefix}_btn_comun", use_container_width=True):
+    if cols[1].button("Usar fecha de inicio común", key=f"{prefix}_btn_comun", width='stretch'):
         st.session_state[session_key_mode] = "Usar fecha de inicio común"
         # Set range from common date to today
         common_date_str = get_max_common_start_date(isins)
@@ -143,7 +188,7 @@ def render_funds_date_selector(prefix: str, isins: List[str]) -> Optional[tuple[
     # Period buttons
     period_buttons = ["YTD", "1A", "3A", "5A"]
     for i, period in enumerate(period_buttons):
-        if cols[i + 2].button(period, key=f"{prefix}_btn_{period}", use_container_width=True):
+        if cols[i + 2].button(period, key=f"{prefix}_btn_{period}", width='stretch'):
             st.session_state[session_key_mode] = period
             # Calculate and save dates automatically
             calculated_start = calculate_date_from_period(period, min_start_date)

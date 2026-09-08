@@ -146,7 +146,7 @@ def render_tab_portfolios():
     st.markdown("<br>", unsafe_allow_html=True)
 
     if not portfolios:
-        st.info("Añade al menos una cartera con fondos y pesos (que sumen 100%) para continuar.")
+        st.info("Añade al menos una cartera con fondos y pesos (que sumen 100%) para ver la comparación.")
     
     # Compare button (always visible)
     compare_button = st.button(
@@ -154,7 +154,7 @@ def render_tab_portfolios():
         key="portfolio_compare_btn",
         type="primary",
         disabled=not portfolios,
-        use_container_width=True
+        width='stretch'
     )
     
     if not portfolios and not st.session_state.should_show_portfolios_comparison:
