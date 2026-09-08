@@ -15,6 +15,7 @@ import streamlit as st
 from streamlit_app.styles import apply_custom_styles
 from streamlit_app.tabs.tab_funds import render_tab_funds
 from streamlit_app.tabs.tab_portfolios import render_tab_portfolios
+from streamlit_app.tabs.tab_available_funds import render_tab_available_funds
 
 def main():
     """Main application entry point."""
@@ -41,13 +42,16 @@ def main():
     """, unsafe_allow_html=True)
 
     # Main tabs
-    tab_funds, tab_portfolios = st.tabs(["Comparar Fondos", "Comparar Carteras"])
+    tab_funds, tab_portfolios, tab_available = st.tabs(["Comparar Fondos", "Comparar Carteras", "Fondos Disponibles"])
 
     with tab_funds:
         render_tab_funds()
 
     with tab_portfolios:
         render_tab_portfolios()
+
+    with tab_available:
+        render_tab_available_funds()
 
 
 if __name__ == "__main__":
